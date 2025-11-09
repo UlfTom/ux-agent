@@ -10,13 +10,15 @@ Das Endziel ist ein "digitaler Zwilling" unseres Kundenstamms, der es uns ermög
 
 ## 2. Die Produkt-Pakete (Das Geschäftsmodell)
 
-Unser System wird in drei Stufen entwickelt und angeboten, die aufeinander aufbauen:
+Unser System wird in drei Stufen entwickelt und angeboten, die aufeinander aufbauen. Die Abrechnung erfolgt über ein flexibles **Token-Modell (Pay-as-you-go)**, das durch **monatliche Abos** (die rabattierte Token-Pakete enthalten) ergänzt werden kann.
 
 ### Paket 1: "Basic" (Unmoderierte Simulation)
-
-* **Das Produkt:** Ein schneller, "dummer" Agent, der eine Aufgabe ausführt.
-* **Module:** `Pilot` (Modul 3)
-* **Funktion:** Der Benutzer gibt eine URL und eine Aufgabe ein. Der Pilot (Agent) versucht, diese Aufgabe so effizient wie möglich zu erledigen (basierend auf einem generischen Standard-Prompt).
+* **Kosten:** 1 Token / Persona
+* **Das Produkt:** Ein schneller, "unmoderierter" Agent, der eine Aufgabe ausführt.
+* **Module:** `Pilot` (Modul 3) + `Gott (Lite)` (Modul 1)
+* **Funktion:**
+    1.  **"Gott (Lite)":** Generiert "live" eine Persona basierend auf der Aufgabe (z.B. "pragmatisch" für eine Such-Aufgabe).
+    2.  **"Pilot":** Führt den Test mit dieser Persona aus.
 * **Wert:** **Quantitatives "Smoke Testing".**
     * *Antwortet auf:* "Ist der Checkout-Flow technisch kaputt?"
     * *Antwortet auf:* "Führt dieser Link zu einer 404-Seite?"
@@ -24,22 +26,22 @@ Unser System wird in drei Stufen entwickelt und angeboten, die aufeinander aufba
 * **Ergebnis:** Ein visuelles Logbuch (Klickpfad + Screenshots).
 
 ### Paket 2: "Plus" (Moderierte Simulation + Generisches Wissen)
-
+* **Kosten:** 5 Tokens / Persona
 * **Das Produkt:** Ein "intelligenter" Agent, der von einem KI-Researcher überwacht wird und auf generisches UX-Wissen zugreift.
-* **Module:** `Pilot` (Modul 3) + `Researcher (MVP)` (Modul 2) + `Gott (MVP)` (Modul 1)
+* **Module:** `Pilot` (Modul 3) + `Researcher (Full)` (Modul 2) + `Gott (Lite)` (Modul 1)
 * **Funktion:**
-    1.  **"Gott (MVP)":** Erstellt "live" eine `n=1` Persona basierend auf einfachen Inputs (z.B. "pragmatisch" vs. "stöberlaune").
-    2.  **"Pilot":** Führt den Test mit dieser Persona aus.
-    3.  **"Researcher (MVP)":** Greift ein, wenn der Pilot "betrunken" ist (z.B. in einer Schleife festhängt).
-    4.  **RAG (Wissens-Integration):** Der Researcher füttert den Piloten mit "Spickzetteln" aus einer generischen Wissensdatenbank (z.B. Baymard, NN Group), um die Entscheidungen realistischer zu machen (z.B. "Hinweis: Pragmatische Nutzer verwenden die Suche").
+    1.  **"Gott (Lite)":** Generiert die Persona "live" (wie in Basic).
+    2.  **"Pilot":** Führt den Test aus.
+    3.  **"Researcher (Full)":** Greift ein, wenn der Pilot "betrunken" ist (z.B. in einer Schleife festhängt). Stellt zwischendrin qualitative Fragen ("Warum hast du das geklickt?").
+    4.  **RAG (Wissens-Integration):** Der Researcher füttert den Piloten mit "Spickzetteln" aus einer generischen Wissensdatenbank (z.B. **Baymard, NN Group**), um die Entscheidungen realistischer zu machen.
 * **Wert:** **Qualitative Heuristik-Prüfung.**
     * *Antwortet auf:* "Warum ist dieser Flow verwirrend?"
     * *Antwortet auf:* "Verstößt unser Design gegen gängige UX-Best-Practices?"
-* **KI-Kosten:** Hoch (2-3 LLM-Aufrufe pro Aktion: Pilot-Denken + Researcher-Prüfung).
-* **Ergebnis:** Ein moderiertes Logbuch mit Rationale und Interventionen.
+* **KI-Kosten:** Hoch (2-3 LLM-Aufrufe pro Aktion: Pilot + Researcher).
+* **Ergebnis:** Ein moderiertes Logbuch mit Rationale, Interventionen und einer finalen KI-Auswertung.
 
 ### Paket 3: "Premium" (Data-Driven "Gott-Modus")
-
+* **Kosten:** 10 Tokens / Persona
 * **Das Produkt:** Eine Simulation, die auf einem "digitalen Zwilling" echter Kundensegmente basiert.
 * **Module:** `Pilot` (Modul 3) + `Researcher (Full)` (Modul 2) + `Gott (Full)` (Modul 1)
 * **Funktion:**
@@ -54,11 +56,9 @@ Unser System wird in drei Stufen entwickelt und angeboten, die aufeinander aufba
 
 ## 3. Die Technischen Kern-Module (Die "Engine")
 
-Diese Module ermöglichen die oben genannten Pakete:
-
 ### Modul 1: "Der Gott-Modus" (Persona-Fabrik)
 * **Funktion:** Erstellt die System-Prompts, die das "Wesen" eines Agenten definieren.
-* **`v1 (Paket 2)`:** Generiert Personas "on-the-fly" basierend auf UI-Inputs (z.B. "pragmatisch").
+* **`v1 (Paket 2)`:** Generiert Personas "on-the-fly", indem die `raw_task_input` analysiert wird (z.B. "Suche nach iPhone" -> "Pragmatische Persona").
 * **`v2 (Paket 3)`:** Generiert Personas basierend auf echten, angebundenen Analytics-Daten.
 
 ### Modul 2: "Der UX Researcher" (Moderator & RAG)
@@ -68,13 +68,16 @@ Diese Module ermöglichen die oben genannten Pakete:
 
 ### Modul 3: "Der Pilot" (Autonomer Agent)
 * **Funktion:** Die "Hände und Augen". Führt die Simulation aus.
-* **Technologie:** `Playwright` (für Web) / `Appium` (für Mobile-Apps).
-* **Kern-Schleife:** `SEHEN` (Screenshot) -> `DENKEN` (Ollama/KI-Aufruf) -> `HANDELN` (Click, Type, Hover).
-* **Output:** Das visuelle Debug-Zip (Logs + Screenshots).
+* **Technologie:** `Playwright` (für Live-Webseiten), `Appium` (für native Mobile-Apps).
+* **Kern-Schleife:** `SEHEN` (Screenshot) -> `DENKEN` (Ollama/KI-Aufruf) -> `HANDELN` (Click, Type, Hover, Swipe).
+* ****
+* **`v2 (Paket 2/3)`:** Erhält eine neue Fähigkeit. Statt eine `url` zu besuchen, kann der Pilot auch:
+    1.  **Statische Bilder (JPG/PNG) oder PDFs** verarbeiten, die vom Benutzer hochgeladen wurden.
+    2.  **Figma-Prototypen** über die Figma-API importieren und als klickbare Screenshots simulieren.
 
 ## 4. Technologie- & Design-Prinzipien
 
 * **Design-Philosophie:** "Editorial Look". Hochwertig, minimalistisch, professionell (Inspiration: DeepL, Dropbox).
 * **Technologie (MVP):** `Next.js` (Frontend), `Playwright` (Browser), `Ollama` (kostengünstige lokale KI).
-* **Kern-Prinzip:** Visuelle Transparenz. Das visuelle Logbuch ist der wertvollste Output.
-* **Architektur:** Entwicklung von einem "MVP-Monolithen" (aktueller Zustand) hin zu einer sauberen Trennung in `lib/`-Services (Persona-Generator, Agent-Pilot, Orchestrator).
+* **Kern-Prinzip:** Visuelle Transparenz. Das visuelle Debug-Zip (Logs + Screenshots) ist der wertvollste Output.
+* **Architektur:** Entwicklung von einem "MVP-Monolithen" hin zu einer sauberen Trennung in `lib/`-Services (Persona-Generator, Agent-Pilot, Orchestrator).
