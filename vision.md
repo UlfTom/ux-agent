@@ -8,65 +8,73 @@ Wir bauen ein System, das nicht nur prüft, *ob* eine Aufgabe lösbar ist, sonde
 
 Das Endziel ist ein "digitaler Zwilling" unseres Kundenstamms, der es uns ermöglicht, Design-Entscheidungen, A/B-Tests und Neukunden-Strategien zu validieren, bevor sie live gehen.
 
-## 2. Die Drei Kern-Module (The "What")
+## 2. Die Produkt-Pakete (Das Geschäftsmodell)
 
-Das System besteht aus drei getrennten, aber miteinander verbundenen KI-Modulen:
+Unser System wird in drei Stufen entwickelt und angeboten, die aufeinander aufbauen:
 
-### Modul 1: "Der Gott-Modus" (Die Persona-Fabrik)
+### Paket 1: "Basic" (Unmoderierte Simulation)
 
-* **Funktion:** Die strategische Erstellung und Verwaltung von Personas.
-* **MVP-Ziel (Phase 1):** Eine "Live"-Generierung einer `n=1` Persona. Das System erhält einfachen Input (z.B. Domain: "E-Commerce", Typ: "Pragmatisch", Aufgabe: "Jeans finden") und generiert daraus einen detaillierten System-Prompt für den Piloten.
-* **Zukunftsvision (Phase 2):** Ein täglicher (oder nächtlicher) Batch-Prozess. "Gott" erstellt `n=100` digitale Personas, die den Status Quo der echten Kund:innen abbilden.
-* **Datenanbindung (Phase 2):** Dieses Modul wird mit echten Daten trainiert/gefüttert:
-    * **Quantitativ:** Adobe Analytics (Klickpfade, Demografie, Abbruchraten).
-    * **Qualitativ:** Echte UX-Befragungen, Support-Tickets, Kunden-Feedback.
-* **Strategisches Ziel (Phase 3):** Die Erstellung von "Was-wäre-wenn"-Personas (z.B. "Nicht-Kund:innen", "Wettbewerber-Kund:innen"), um Hypothesen für die Neukund:innen-Akquise zu testen.
+* **Das Produkt:** Ein schneller, "dummer" Agent, der eine Aufgabe ausführt.
+* **Module:** `Pilot` (Modul 3)
+* **Funktion:** Der Benutzer gibt eine URL und eine Aufgabe ein. Der Pilot (Agent) versucht, diese Aufgabe so effizient wie möglich zu erledigen (basierend auf einem generischen Standard-Prompt).
+* **Wert:** **Quantitatives "Smoke Testing".**
+    * *Antwortet auf:* "Ist der Checkout-Flow technisch kaputt?"
+    * *Antwortet auf:* "Führt dieser Link zu einer 404-Seite?"
+* **KI-Kosten:** Niedrig (1 LLM-Aufruf pro Aktion).
+* **Ergebnis:** Ein visuelles Logbuch (Klickpfad + Screenshots).
 
-### Modul 2: "Der UX Researcher" (Der Moderator)
+### Paket 2: "Plus" (Moderierte Simulation + Generisches Wissen)
 
-* **Funktion:** Das "taktische Gehirn" einer *einzelnen* Simulations-Session. Er plant, moderiert und wertet den Testlauf aus.
-* **Prozess (Chain of Thought):**
-    1.  **Setup:** Erhält eine Persona von "Gott" (z.B. "Du bist Sabine, 42, pragmatisch...").
-    2.  **Testdesign:** Verfeinert die `raw_task_input` ("Finde Jeans") in eine klare, neutrale Test-Aufgabe. Erstellt einen internen Fragenkatalog.
-    3.  **Moderation (Interaktiv):** Leitet den "Piloten" (Modul 3) an. Wenn der Pilot in einer Schleife festhängt oder eine unerwartete Aktion durchführt, kann der "Researcher" eingreifen und eine qualitative Frage stellen (z.B. "Warum hast du auf 'Weihnachten' geklickt?").
-    4.  **Auswertung:** Analysiert das finale Logbuch (Klickpfad, Screenshots, rationale Gedanken, Antworten auf Fragen) und erstellt einen finalen Management-Summary für diesen einen Test.
+* **Das Produkt:** Ein "intelligenter" Agent, der von einem KI-Researcher überwacht wird und auf generisches UX-Wissen zugreift.
+* **Module:** `Pilot` (Modul 3) + `Researcher (MVP)` (Modul 2) + `Gott (MVP)` (Modul 1)
+* **Funktion:**
+    1.  **"Gott (MVP)":** Erstellt "live" eine `n=1` Persona basierend auf einfachen Inputs (z.B. "pragmatisch" vs. "stöberlaune").
+    2.  **"Pilot":** Führt den Test mit dieser Persona aus.
+    3.  **"Researcher (MVP)":** Greift ein, wenn der Pilot "betrunken" ist (z.B. in einer Schleife festhängt).
+    4.  **RAG (Wissens-Integration):** Der Researcher füttert den Piloten mit "Spickzetteln" aus einer generischen Wissensdatenbank (z.B. Baymard, NN Group), um die Entscheidungen realistischer zu machen (z.B. "Hinweis: Pragmatische Nutzer verwenden die Suche").
+* **Wert:** **Qualitative Heuristik-Prüfung.**
+    * *Antwortet auf:* "Warum ist dieser Flow verwirrend?"
+    * *Antwortet auf:* "Verstößt unser Design gegen gängige UX-Best-Practices?"
+* **KI-Kosten:** Hoch (2-3 LLM-Aufrufe pro Aktion: Pilot-Denken + Researcher-Prüfung).
+* **Ergebnis:** Ein moderiertes Logbuch mit Rationale und Interventionen.
 
-### Modul 3: "Der Pilot" (Der Autonome Agent)
+### Paket 3: "Premium" (Data-Driven "Gott-Modus")
 
-* **Funktion:** Die "Hände und Augen" (operativ). Er führt die Simulation als die ihm zugewiesene Persona durch.
-* **Technologie:** `Playwright` (Hände) & `Ollama (llava)` (Augen/Gehirn).
-* **Kern-Schleife (Der "Loop"):**
-    1.  **SEHEN:** Erfasst den aktuellen Zustand (Screenshot + DOM-Elemente).
-    2.  **DENKEN:** Übergibt (Screenshot, DOM-Liste, Aufgabe, Persona-Prompt, Gedächtnis) an das LLM (`getNextAction`).
-    3.  **HANDELN:** Führt die zurückgegebene Aktion (z.B. `click`, `type`, `hover`) robust mit Playwright aus.
-* **Output:** Produziert das "Debug-Zip" (visuelles Logbuch mit Screenshots und Text-Logs), das als Rohmaterial für den "Researcher" dient.
+* **Das Produkt:** Eine Simulation, die auf einem "digitalen Zwilling" echter Kundensegmente basiert.
+* **Module:** `Pilot` (Modul 3) + `Researcher (Full)` (Modul 2) + `Gott (Full)` (Modul 1)
+* **Funktion:**
+    1.  **"Gott (Full)":** Dieses Modul ist jetzt an unsere internen Daten angebunden (z.B. **Adobe Analytics**, echte UX-Befragungen). Es erstellt nicht-zufällige Personas, die reale Segmente abbilden (z.B. "Erstellt eine Persona, die das 35%-Segment repräsentiert, das bei uns immer die Suche nutzt").
+    2.  **"Researcher (Full)":** Nutzt die Datenanbindung für tiefere Analysen.
+    3.  **"Pilot":** Führt den Test aus.
+* **Wert:** **Predictive UX Analytics.**
+    * *Antwortet auf:* "Wie wird unser 35%-Such-Segment auf das neue Design reagieren?"
+    * *Antwortet auf:* "Wie verhält sich ein 'Nicht-Kunde' (Zielgruppe) auf unserer Seite im Vergleich zu einem 'Bestandskunden'?"
+* **KI-Kosten:** Sehr hoch.
+* **Ergebnis:** Ein datengesteuerter Simulationsbericht, der Hypothesen validiert und Neukunden-Strategien testet.
 
-## 3. Die MVP-Roadmap (The "How")
+## 3. Die Technischen Kern-Module (Die "Engine")
 
-### Phase 1: Stabiler MVP (Fokus: Technik)
-* **Ziel:** Die Kern-Schleife (`SEHEN` -> `DENKEN` -> `HANDELN`) zu 100% stabilisieren.
-* **Aufgaben:**
-    * Cookie-Banner zuverlässig erkennen und schließen.
-    * "Drunk AI" (Schleifen, Halluzinationen) durch robuste Selektoren und "Gedächtnis" im Prompt verhindern.
-    * "Index-Mismatch"-Fehler (DOM vs. Playwright) eliminieren.
-    * Visuelles Logbuch und Zip-Download für das Debugging perfektionieren.
+Diese Module ermöglichen die oben genannten Pakete:
 
-### Phase 2: "Researcher"-Modul (Fokus: Intelligenz)
-* **Ziel:** Die Trennung von "Researcher" und "Pilot" implementieren.
-* **Aufgaben:**
-    * `generatePersonaPrompt`-Funktion (Modul 2) implementieren, wie vom User gewünscht (Input: "E-Commerce", "Pragmatisch").
-    * Das Frontend um die (gesperrten) Eingabefelder für "Domain" und "Persona-Typ" erweitern.
-    * Das Logbuch um den "Persona-Briefing"-Schritt erweitern.
+### Modul 1: "Der Gott-Modus" (Persona-Fabrik)
+* **Funktion:** Erstellt die System-Prompts, die das "Wesen" eines Agenten definieren.
+* **`v1 (Paket 2)`:** Generiert Personas "on-the-fly" basierend auf UI-Inputs (z.B. "pragmatisch").
+* **`v2 (Paket 3)`:** Generiert Personas basierend auf echten, angebundenen Analytics-Daten.
 
-### Phase 3: "Gott-Modus" (Fokus: Skalierung & Daten)
-* **Ziel:** Von `n=1` zu `n=100` übergehen und echte Daten integrieren.
-* **Aufgaben:**
-    * Migration auf einen **VPS (Managed Server)**, der Batch-Jobs (z.B. 100 Playwright-Instanzen gleichzeitig) ausführen kann.
-    * Aufbau einer **Vektor-Datenbank** (z.B. mit dem Wissen von Baymard, NN Group, Adobe Analytics-Exporten).
-    * Das "Gott"-Modul (Modul 1) baut Personas nicht mehr "live", sondern holt sie aus dem Pool der datenbasierten, digital-Zwillings-Personas.
+### Modul 2: "Der UX Researcher" (Moderator & RAG)
+* **Funktion:** Das taktische Gehirn. Plant, moderiert und wertet aus.
+* **`v1 (Paket 2)`:** Implementiert Schleifenerkennung und RAG (Retrieval-Augmented Generation) mit *generischem* Wissen (Baymard, NN Group).
+* **`v2 (Paket 3)`:** Führt RAG mit *internem* Wissen durch (A/B-Test-Ergebnisse, Analytics-Fakten).
 
-## 4. Design- & Technologie-Prinzipien
+### Modul 3: "Der Pilot" (Autonomer Agent)
+* **Funktion:** Die "Hände und Augen". Führt die Simulation aus.
+* **Technologie:** `Playwright` (für Web) / `Appium` (für Mobile-Apps).
+* **Kern-Schleife:** `SEHEN` (Screenshot) -> `DENKEN` (Ollama/KI-Aufruf) -> `HANDELN` (Click, Type, Hover).
+* **Output:** Das visuelle Debug-Zip (Logs + Screenshots).
 
-* **Design-Philosophie:** "Editorial Look". Hochwertig, minimalistisch, professionell (Inspiration: DeepL, Dropbox Brand Page). Der Fokus liegt auf "Sexappeal" durch Typografie, Whitespace und subtile Animationen.
-* **Technologie (MVP):** `Next.js` (Frontend), `Playwright` (Browser-Automatisierung), `Ollama` (kostengünstige, lokale KI-Entwicklung).
-* **Kern-Prinzip:** Visuelle Transparenz. Das visuelle Logbuch (Screenshots + Rationale) ist der wertvollste Output des gesamten Systems.
+## 4. Technologie- & Design-Prinzipien
+
+* **Design-Philosophie:** "Editorial Look". Hochwertig, minimalistisch, professionell (Inspiration: DeepL, Dropbox).
+* **Technologie (MVP):** `Next.js` (Frontend), `Playwright` (Browser), `Ollama` (kostengünstige lokale KI).
+* **Kern-Prinzip:** Visuelle Transparenz. Das visuelle Logbuch ist der wertvollste Output.
+* **Architektur:** Entwicklung von einem "MVP-Monolithen" (aktueller Zustand) hin zu einer sauberen Trennung in `lib/`-Services (Persona-Generator, Agent-Pilot, Orchestrator).
