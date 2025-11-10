@@ -1,263 +1,147 @@
-// app/page.tsx
+// app/page.tsx (Die NEUE Landing Page)
 "use client";
 
-import { useState } from 'react';
+import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Rabbit, Copy, Check, Loader2, Info, Eye, Download, Settings } from "lucide-react";
+// HINWEIS: Du musst 'framer-motion' installieren, falls noch nicht geschehen: npm install framer-motion
+import { motion, Variants } from 'framer-motion'; // <-- 1. GEÄNDERT: 'Variants' importiert
+import { Bot, Rabbit, Copy, Check, Eye, Download, Settings, Star, Zap, Package, Loader2 } from "lucide-react";
 
-type LogStep = {
-  step: string;
-  logs: string[];
-  image?: string;
-};
+export default function LandingPage() {
 
-// Vordefinierte Persona-Typen (für die Zukunft)
-const personaTypeOptions = [
-  { id: 'pragmatic', name: 'Pragmatisch' },
-  { id: 'inspirational', name: 'Inspirativ (Stöbernd)' },
-];
-
-// Vordefinierte Domains (für die Zukunft)
-const domainOptions = [
-  { id: 'ecommerce', name: 'E-Commerce' },
-  { id: 'travel', name: 'Reisebuchung' },
-  { id: 'finance', name: 'Finanzdienstleistung' },
-];
-
-export default function Home() {
-  const [url, setUrl] = useState('https://www.otto.de');
-  const [task, setTask] = useState('Finde eine Winter-Jeans für Damen');
-  const [loading, setLoading] = useState(false);
-  const [log, setLog] = useState<LogStep[]>([]);
-  const [progress, setProgress] = useState(0);
-  const [copied, setCopied] = useState(false);
-
-  const [browserType, setBrowserType] = useState('chrome');
-  const [clickDepth, setClickDepth] = useState(7);
-  const [personasCount, setPersonasCount] = useState(1);
-  const [domain, setDomain] = useState('ecommerce');
-  const [personaType, setPersonaType] = useState('pragmatic');
-
-  const handleStartSimulation = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); setLoading(true); setLog([]); setCopied(false); setProgress(30);
-
-    try {
-      const res = await fetch('/api/run-simulation', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          task,
-          browserType,
-          clickDepth,
-          domain,
-          personaType
-        }),
-      });
-      setProgress(70);
-      const data = await res.json();
-      if (!res.ok) {
-        setLog(data.log || [{ step: "FEHLER", logs: [data.message || 'Unbekannter Serverfehler'] }]);
-        throw new Error(data.message || 'Simulation fehlgeschlagen');
+  // 2. GEÄNDERT: Wir sagen TypeScript, dass dies ein 'Variants'-Objekt ist
+  const fadeIn: Variants = {
+    initial: { opacity: 0, y: 20 },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        ease: "easeOut" // Dieser String ist jetzt typsicher
       }
-      setLog(data.log); setProgress(100);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unbekannter Fehler";
-      if (log.length === 0) { setLog([{ step: "CLIENT-FEHLER", logs: [errorMsg] }]); }
-      setProgress(0);
-    } finally {
-      setLoading(false); setTimeout(() => setProgress(0), 1000);
-    }
+    },
   };
-
-  const handleCopyLog = () => {
-    if (log.length === 0) return;
-    const logText = log.map(step => `${step.step}\n${step.logs.join('\n')}`).join('\n\n');
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(logText).then(() => {
-        setCopied(true); setTimeout(() => setCopied(false), 2000);
-      }).catch(err => console.warn('Fehler beim Kopieren:', err));
-    } else {
-      const textArea = document.createElement("textarea"); textArea.value = logText;
-      document.body.appendChild(textArea); textArea.focus(); textArea.select();
-      try { document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-      catch (err) { console.error('Fallback-Kopieren fehlgeschlagen:', err); }
-      document.body.removeChild(textArea);
-    }
-  };
-
-  const handleDownloadZip = async () => {
-    if (log.length === 0) return;
-    try {
-      const res = await fetch('/api/download-zip', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log)
-      });
-      if (!res.ok) throw new Error('Zip-Download fehlgeschlagen');
-      const blob = await res.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = downloadUrl; a.download = 'simulation_debug.zip';
-      document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : "Unbekannter Fehler");
-    }
-  };
-
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen overflow-x-hidden">
 
-      <header
-        className="fixed top-4 left-1/2 -translate-x-1/2 z-10 
-                   flex items-center justify-between
-                   w-[90vw] max-w-5xl px-4 py-3 
-                   rounded-lg border border-white/20 
-                   bg-white/50 shadow-md backdrop-blur-lg"
-      >
-        <div className="flex items-center gap-2">
-          <Bot className="h-6 w-6 text-primary" />
-          <span className="text-xl font-semibold text-foreground">KI UX-Agent</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-foreground">
-            <Settings className="h-5 w-5" />
-          </Button>
-        </div>
-      </header>
+      {/* Der globale "Glass-Header" aus app/layout.tsx wird hier automatisch angezeigt. */}
 
-      <main className="container mx-auto max-w-5xl px-4 py-32">
-        <div className="space-y-12">
+      <main className="flex-grow container mx-auto max-w-5xl px-4 py-32">
+        <motion.div
+          className="text-center flex flex-col items-center"
+          initial="initial"
+          animate="animate"
+          transition={{ staggerChildren: 0.1 }}
+        >
+          <motion.h1
+            className="text-5xl md:text-7xl font-bold text-foreground mb-6"
+            variants={fadeIn}
+          >
+            Testen Sie Ihre UX
+            <br />
+            <span className="text-primary">mit autonomen KI-Agenten.</span>
+          </motion.h1>
 
-          <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200">
-            <CardHeader className="p-0 mb-6">
-              <CardTitle className="text-2xl font-bold">Simulationseinstellungen</CardTitle>
-              <CardDescription>
-                Definiere die Parameter für deinen nächsten Testlauf.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <form onSubmit={handleStartSimulation} className="space-y-6">
+          <motion.p
+            className="text-lg md:text-xl text-muted-foreground max-w-2xl mb-8"
+            variants={fadeIn}
+          >
+            Hören Sie auf zu raten. Validieren Sie Designs, finden Sie Usability-Probleme und verstehen Sie Ihre Nutzer – skaliert, schnell und datengetrieben.
+          </motion.p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="domain">Domain (Gesperrt)</Label>
-                    <Select value={domain} onValueChange={setDomain} disabled>
-                      <SelectTrigger id="domain"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {domainOptions.map(opt => (
-                          <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="personaType">Persona-Typ (Gesperrt)</Label>
-                    <Select value={personaType} onValueChange={setPersonaType} disabled>
-                      <SelectTrigger id="personaType"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {personaTypeOptions.map(opt => (
-                          <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="personas">Anzahl (Gesperrt)</Label>
-                    <Input id="personas" type="number" value={personasCount} disabled readOnly className="cursor-not-allowed bg-slate-50" />
-                  </div>
+          <motion.div variants={fadeIn}>
+            <Button asChild size="lg" className="text-lg">
+              <Link href="/simulation">
+                <Rabbit className="mr-2 h-5 w-5" />
+                Zur Simulation starten
+              </Link>
+            </Button>
+          </motion.div>
+        </motion.div>
+
+        <motion.div
+          className="mt-32"
+          initial="initial"
+          whileInView="animate" // Animation startet, wenn man hinscrollt
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ staggerChildren: 0.2 }}
+        >
+          <h2 className="text-4xl font-bold text-center mb-12">
+            Entwickelt für Ihre Anforderungen
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Paket 1: Basic */}
+            <motion.div variants={fadeIn}>
+              <Card className="shadow-lg h-full flex flex-col">
+                <CardHeader>
+                  <Package className="h-8 w-8 text-primary mb-4" />
+                  <CardTitle className="text-2xl">Basic</CardTitle>
+                  <CardDescription>Unmoderierte Simulation</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow space-y-2 text-muted-foreground">
+                  <p>Ein schneller, quantitativer "Smoke Test".</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>n=1 Agent</li>
+                    <li>Quantitativer Klickpfad</li>
+                    <li>Visuelles Logbuch</li>
+                  </ul>
+                </CardContent>
+                <div className="p-6 pt-0">
+                  <Button variant="outline" className="w-full" disabled>1 Token / Test</Button>
                 </div>
+              </Card>
+            </motion.div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t">
-                  <div className="space-y-2">
-                    <Label htmlFor="browser">Browser</Label>
-                    <Select value={browserType} onValueChange={setBrowserType}>
-                      <SelectTrigger id="browser"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="chrome">Chrome</SelectItem>
-                        <SelectItem value="firefox">Firefox</SelectItem>
-                        <SelectItem value="safari">Safari</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="clicks">Max. Aktionen</Label>
-                    <Input id="clicks" type="number" value={clickDepth} onChange={(e) => setClickDepth(parseInt(e.target.value, 10))} min="1" max="10" />
-                  </div>
+            {/* Paket 2: Plus */}
+            <motion.div variants={fadeIn}>
+              <Card className="shadow-lg h-full flex flex-col border-2 border-primary">
+                <CardHeader>
+                  <Zap className="h-8 w-8 text-primary mb-4" />
+                  <CardTitle className="text-2xl">Plus</CardTitle>
+                  <CardDescription>Moderierte Simulation + Gen. Wissen</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow space-y-2 text-muted-foreground">
+                  <p>Ein "smarter" Agent mit KI-Moderator.</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Live generierte Persona</li>
+                    <li>RAG mit Baymard/NN Group Wissen</li>
+                    <li>Intervention bei Schleifen</li>
+                    <li>Qualitative Auswertung</li>
+                  </ul>
+                </CardContent>
+                <div className="p-6 pt-0">
+                  <Button className="w-full" disabled>5 Tokens / Test</Button>
                 </div>
+              </Card>
+            </motion.div>
 
-                <div className="space-y-6 pt-6 border-t">
-                  <div className="space-y-2">
-                    <Label htmlFor="url">Start-URL</Label>
-                    <Input id="url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="task">Aufgabe für die KI</Label>
-                    <Input id="task" type="text" value={task} onChange={(e) => setTask(e.target.value)} required />
-                  </div>
+            {/* Paket 3: Premium */}
+            <motion.div variants={fadeIn}>
+              <Card className="shadow-lg h-full flex flex-col">
+                <CardHeader>
+                  <Star className="h-8 w-8 text-primary mb-4" />
+                  <CardTitle className="text-2xl">Premium</CardTitle>
+                  <CardDescription>Data-Driven "Gott-Modus"</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow space-y-2 text-muted-foreground">
+                  <p>Ein "digitaler Zwilling" Ihrer echten Kunden.</p>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li>Anbindung an Adobe Analytics</li>
+                    <li>Personas basierend auf echten Segmenten</li>
+                    <li>Testen von "Nicht-Kunden"-Hypothesen</li>
+                  </ul>
+                </CardContent>
+                <div className="p-6 pt-0">
+                  <Button variant="outline" className="w-full" disabled>10 Tokens / Test</Button>
                 </div>
-
-                {loading && <Progress value={progress} className="w-full" />}
-                <Button type="submit" disabled={loading} className="w-full text-lg" size="lg">
-                  {loading ? (<><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Simulation läuft...</>)
-                    : (<><Rabbit className="mr-2 h-5 w-5" /> Simulation starten</>)}
-                </Button>
-              </form>
-            </CardContent>
+              </Card>
+            </motion.div>
           </div>
+        </motion.div>
 
-          <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200">
-            <CardHeader className="p-0 mb-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>Simulations-Logbuch</CardTitle>
-                  <CardDescription>
-                    Visuelle Schritte und Aktionen des Agenten.
-                  </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="icon" onClick={handleCopyLog} disabled={log.length === 0} title="Log kopieren">
-                    {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                  <Button variant="outline" size="icon" onClick={handleDownloadZip} disabled={log.length === 0} title="Debug-Zip herunterladen">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="space-y-6 overflow-y-auto h-[600px] p-1 border rounded-md">
-                {log.length > 0 ? (
-                  log.map((step, index) => (
-                    // Wir verwenden 'step.step' + index als Key, um ihn einzigartig zu machen
-                    <div key={`${step.step}-${index}`} className="border-b last:border-b-0">
-                      <div className="p-3">
-                        <h3 className="font-semibold text-lg">{step.step}</h3>
-                      </div>
-                      {step.image && (
-                        <div className="bg-slate-100 p-2">
-                          <img src={`data:image/png;base64,${step.image}`} alt={`Screenshot für ${step.step}`} className="w-full rounded-md border-2 border-slate-300" />
-                        </div>
-                      )}
-                      <pre className="text-sm bg-white text-slate-600 p-4 overflow-x-auto">
-                        {step.logs.join('\n')}
-                      </pre>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center text-slate-500 py-20">
-                    <Eye className="mx-auto h-12 w-12 text-slate-400" />
-                    <p className="mt-2">Simulation noch nicht gestartet...</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </div>
-
-        </div>
       </main>
     </div>
   );
