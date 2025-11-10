@@ -1,26 +1,101 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 248 249 250;
+    /* #f8f9fa */
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 220 13.0% 45.1%;
+    --primary-foreground: 210 20% 98%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 222 47.4% 11.2%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 222 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 224 71.4% 4.1%;
+    --radius: 0.5rem;
+    --expoOut: cubic-bezier(.16, 1, .3, 1);
   }
+
+  /*.dark {
+    (Darkmode-Variablen hier...)
+  }*/
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ==============================================
+DEIN CUSTOM HEADER CSS (JETZT KORREKT GEWICKELT)
+==============================================
+*/
+@layer components {
+  #header {
+    position: fixed;
+    top: 20px;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  #header .group {
+    -webkit-backdrop-filter: blur(max(1.1pc, min(1.389vw, 26.6px)));
+    backdrop-filter: blur(max(1.1pc, min(1.389vw, 26.6px)));
+    background-color: hsla(0, 0%, 100%, .2);
+    border-radius: max(1.1pc, min(1.389vw, 26.6px));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: max(.33pc, min(.417vw, 7.98px));
+    pointer-events: all;
+    width: calc(32% + max(7.92px, min(.625vw, 11.97px)));
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    border: 1px solid hsla(0, 0%, 100%, .3);
+  }
+
+  @media (max-width:1240px) {
+    #header .group {
+      width: 90vw
+    }
+  }
+
+  #header .group .logo {
+    display: inline-block;
+    display: flex;
+    height: auto;
+    line-height: 1;
+    margin-left: max(.99pc, min(1.25vw, 23.94px));
+    overflow: visible;
+    text-align: center;
+    transform: translateX(max(0px, min(0vw, 0px)));
+    transition: all .6s cubic-bezier(.16, 1, .3, 1);
+    transition: all .6s var(--expoOut);
+    width: max(5.83pc, min(7.361vw, 8.811250000000001pc))
+  }
+
+  @media (max-width:1240px) {
+    #header .group .logo {
+      width: max(79.2px, min(6.25vw, 119.7px))
+    }
+  }
+
+  #header .group .logo>img,
+  #header .group .logo>svg {
+    height: auto;
+    transition: all .6s cubic-bezier(.16, 1, .3, 1);
+    transition: all .6s var(--expoOut);
+    vertical-align: middle;
+    width: 100%
+  }
 }
