@@ -72,15 +72,10 @@ async function getInteractableElements(page: Page, baseSelector: string, maxElem
 
         if (!box || box.width === 0 || box.height === 0) continue;
 
-        // ✅ NEW: Check if element is visible
         try {
             const isVisible = await locator.isVisible({ timeout: 50 });
-            if (!isVisible) {
-                console.log(`[SKIP] Element ${i} not visible`);
-                continue;
-            }
+            if (!isVisible) continue;
         } catch (e) {
-            console.log(`[SKIP] Element ${i} visibility check failed`);
             continue;
         }
 
@@ -103,11 +98,7 @@ async function getInteractableElements(page: Page, baseSelector: string, maxElem
             if (!text && placeholder) text = placeholder;
         }
 
-        // ✅ NEW: Skip elements without meaningful text
-        if (!text || text === 'Kein Text') {
-            console.log(`[SKIP] Element ${i} has no text`);
-            continue;
-        }
+        if (!text || text.length === 0) continue;
 
         elements.push({
             id: cleanIdCounter,
@@ -194,38 +185,58 @@ async function getVisualIntention(
     task: string,
     annotatedScreenshotBase64: string,
     personaPrompt: string,
-    sessionState: SessionState
+    sessionState: SessionState,
+    currentUrl: string
 ): Promise<string> {
     const isPragmatic = personaPrompt.toLowerCase().includes('pragmatisch');
+    const typeCount = sessionState.actionHistory.filter(a => a.includes('type')).length;
+    const isOnSearchResults = currentUrl.includes('/suche/') ||
+        currentUrl.includes('/search/') ||
+        currentUrl.includes('winter') ||
+        sessionState.onSearchResults;
 
     const prompt = `
 ${personaPrompt}
 
-Deine Aufgabe: "${task}"
+AUFGABE: "${task}"
 
-CURRENT STATE:
-- Search typed: ${sessionState.searchText || 'none'}
-- Search submitted: ${sessionState.searchSubmitted}
-- On search results: ${sessionState.onSearchResults}
-- Last action: ${sessionState.lastAction}
+🔴 CRITICAL STATE:
+- Current URL: ${currentUrl}
+- Search Text: "${sessionState.searchText || 'none'}"
+- Search Submitted: ${sessionState.searchSubmitted}
+- On Search Results Page: ${isOnSearchResults}
+- Times Typed: ${typeCount}
+- Last 3 Actions: ${sessionState.actionHistory.slice(-3).join(' → ')}
+
+${typeCount >= 2 ?
+            `🚫🚫🚫 ACHTUNG! Du hast BEREITS ${typeCount}x "${sessionState.searchText}" getippt! 
+  NICHT NOCHMAL TIPPEN! Die Suche läuft! Du musst jetzt PRODUKTE ANSCHAUEN!` : ''}
+
+${isOnSearchResults ?
+            `✅✅✅ DU BIST AUF DER SUCHERGEBNISSEITE! 
+  Die URL enthält "/suche/" oder Produktliste ist sichtbar!
+  Siehst du Produkt-Bilder oder Jeans-Fotos? KLICKE AUF EIN PRODUKT!
+  NICHT NOCHMAL IN DIE SUCHE TIPPEN! KLICKE EIN PRODUKT AN!` : ''}
 
 Schau das Bild an. Rote Boxen mit IDs sind interaktiv.
 
-RULES:
-1. Cookie-Banner? Klicke "OK" ZUERST!
-2. ${isPragmatic ? 'Nutze die Suche!' : 'Stöbere!'}
-3. ${sessionState.searchText && !sessionState.searchSubmitted ? '⚠️ Du hast getippt aber NICHT abgeschickt! Klicke Suchen-Button JETZT!' : ''}
-4. ${sessionState.onSearchResults ? '✅ Auf Suchergebnissen! Klicke PRODUKT!' : ''}
+GENERIC RULES (SEHR WICHTIG):
+1. Cookie-Banner sichtbar? → Klicke "OK" [ID]
+2. Noch keine Suche getippt? → Tippe EINMAL in Suchfeld
+3. ${typeCount >= 1 ? '⚠️ Suche läuft bereits! NICHT NOCHMAL TIPPEN! Klicke Produkt!' : ''}
+4. Siehst du Produktbilder/Fotos von Jeans/Kleidung? → KLICKE AUF EIN PRODUKT [ID]!
+5. Wenig Produkte sichtbar? → Scrolle nach unten
+6. ${isPragmatic ? 'Du bist PRAGMATISCH: Nutze Suche!' : 'Du bist EXPLORATIVER: Stöbere!'}
 
-Beschreibe deine Absicht in EINEM Satz mit ID [X].
+Was machst du JETZT? Antworte in EINEM kurzen Satz mit ID [X].
 
 Beispiele:
-- "Ich klicke auf OK [12]"
-- "Ich tippe 'Winter-Jeans' in [1]"
-- "Ich klicke auf Lupen-Icon [2]"
-- "Ich klicke auf Produkt [45]"
+- "Ich klicke auf Cookie OK [5]"
+- "Ich tippe 'Winter-Jeans' in Suchfeld [0]"
+- "Ich klicke auf das erste Jeans-Produkt [12]"
+- "Ich scrolle nach unten für mehr Produkte"
 
-Antworte JETZT:
+Antworte JETZT in einem kurzen Satz:
 `;
 
     try {
@@ -270,19 +281,19 @@ Aufgabe: "${task}"
 STATE:
 - Search typed: "${sessionState.searchText || 'none'}"
 - Search submitted: ${sessionState.searchSubmitted}
-- On search results: ${sessionState.onSearchResults}
-- Last: ${sessionState.actionHistory.slice(-2).join(', ')}
+- On results: ${sessionState.onSearchResults}
+- Last 3: ${sessionState.actionHistory.slice(-3).join(', ')}
 
-${suggestedId !== null ? `⚠️ Pilot erwähnte ID ${suggestedId}! VERWENDE SIE!` : ''}
+${suggestedId !== null ? `⚠️ Pilot erwähnte ID ${suggestedId}! VERWENDE SIE wenn möglich!` : ''}
 
 Elemente (Top 30):
 ${JSON.stringify(interactableElements.slice(0, 30), null, 2)}
 
 RULES:
-1. Pilot ID ${suggestedId} → VERWENDE SIE!
+1. Pilot ID ${suggestedId} → VERWENDE SIE wenn valid!
 2. "tippen" → NUR role: "textbox"
 3. "klicken" → NUR role: "link" oder "button"
-4. ${sessionState.searchText && !sessionState.searchSubmitted ? '⚠️ Search NOT submitted! Click search button!' : ''}
+4. ${sessionState.actionHistory.filter(a => a.includes('type')).length >= 2 ? '⚠️ BEREITS 2x getippt! Nicht nochmal "type"!' : ''}
 
 Antworte NUR mit JSON:
 { "action": "type", "idToInteract": <num>, "textToType": "<text>", "rationale": "..." }
@@ -319,11 +330,8 @@ Antworte NUR mit JSON:
         const chosenId = parseInt(String(actionJson.idToInteract), 10);
         const elementToInteract = interactableElements.find(el => el.id === chosenId);
 
-        // Smart Validation
         if (actionJson.action === 'type') {
             if (!elementToInteract || elementToInteract.role !== 'textbox') {
-                console.error(`❌ Type on wrong element ID ${chosenId}`);
-
                 const textboxes = interactableElements.filter(el => el.role === 'textbox');
 
                 if (textboxes.length > 0) {
@@ -345,8 +353,6 @@ Antworte NUR mit JSON:
 
         if (actionJson.action === 'click') {
             if (!elementToInteract || (elementToInteract.role !== 'link' && elementToInteract.role !== 'button')) {
-                console.error(`❌ Click on wrong element ID ${chosenId}`);
-
                 const clickables = interactableElements.filter(el => el.role === 'link' || el.role === 'button');
 
                 if (clickables.length > 0) {
@@ -390,6 +396,25 @@ function stripAnsiCodes(str: string): string {
     return str.replace(/[\u001b\u009b][[()#;?]?[0-9]{1,4}(?:;[0-9]{0,4})?[0-9A-ORZcf-nqry=><]/g, '');
 }
 
+async function checkAndDismissCookie(page: Page, logs: string[]): Promise<boolean> {
+    try {
+        const cookieRegex = /^(OK|Alle akzeptieren|Akzeptieren|Accept|Verstanden|Einwilligung|Zustimmen)$/i;
+        const cookieButton = page.getByRole('button', { name: cookieRegex }).first();
+
+        const isVisible = await cookieButton.isVisible({ timeout: 1000 });
+        if (isVisible) {
+            logs.push('🍪 Cookie-Banner! Klicke OK...');
+            await cookieButton.click({ timeout: 3000 });
+            await page.waitForTimeout(500);
+            logs.push('✓ Cookie dismissed');
+            return true;
+        }
+    } catch {
+        // No cookie
+    }
+    return false;
+}
+
 async function preFlightCookieClick(
     page: Page,
     logHistory: string[],
@@ -397,18 +422,11 @@ async function preFlightCookieClick(
     controller?: ReadableStreamDefaultController
 ) {
     const currentStepLogs: string[] = [];
-    const cookieRegex = /^(OK|Alle akzeptieren|Einwilligung|Akzeptieren|Verstanden|Alle annehmen)$/i;
 
-    try {
-        const cookieButton = page.getByRole('button', { name: cookieRegex, exact: false }).first();
-        await cookieButton.waitFor({ state: 'visible', timeout: 3000 });
+    const dismissed = await checkAndDismissCookie(page, currentStepLogs);
 
-        const buttonText = (await cookieButton.innerText()) || "OK";
-        currentStepLogs.push(`✓ Cookie-Banner: "${buttonText}"`);
-
-        await cookieButton.click({ force: true, timeout: 3000 });
+    if (dismissed) {
         logHistory.push(`Cookie akzeptiert`);
-        await page.waitForTimeout(500);
 
         const cookieStep: LogStep = {
             step: "Schritt 1.5 (Cookie-Banner)",
@@ -422,8 +440,21 @@ async function preFlightCookieClick(
         if (controller) {
             sendSSE(controller, { type: 'step', step: cookieStep, progress: 38 });
         }
-    } catch (error) {
+    } else {
         currentStepLogs.push("ℹ️ Kein Cookie-Banner");
+    }
+}
+
+function updateSessionState(page: Page, sessionState: SessionState) {
+    const currentUrl = page.url();
+    sessionState.currentUrl = currentUrl;
+
+    if (currentUrl.includes('/suche/') ||
+        currentUrl.includes('/search/') ||
+        currentUrl.includes('?q=') ||
+        currentUrl.includes('/results')) {
+        sessionState.onSearchResults = true;
+        sessionState.searchSubmitted = true;
     }
 }
 
@@ -462,7 +493,7 @@ export async function POST(request: NextRequest) {
             };
 
             try {
-                console.log(`[START] Simulation gestartet für ${url}`);
+                console.log(`[START] Simulation für ${url}`);
 
                 sendSSE(controller, { type: 'progress', value: 10, status: 'Generiere Persona...' });
 
@@ -485,7 +516,7 @@ export async function POST(request: NextRequest) {
 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
 
-                sessionState.currentUrl = page.url();
+                updateSessionState(page, sessionState);
                 console.log(`[LOADED] ${sessionState.currentUrl}`);
 
                 const startStep: LogStep = {
@@ -523,7 +554,51 @@ export async function POST(request: NextRequest) {
 
                     sendSSE(controller, { type: 'progress', value: progressPercent, status: currentStepName });
 
+                    await checkAndDismissCookie(page, currentStepLogs);
+
                     await page.waitForTimeout(200);
+
+                    // ENHANCED LOOP DETECTION
+                    const recentActions = sessionState.actionHistory.slice(-3);
+                    const allSame = recentActions.length >= 3 && recentActions.every(a => a === recentActions[0]);
+
+                    if (allSame) {
+                        currentStepLogs.push(`⚠️ LOOP DETECTED: "${recentActions[0]}" 3x wiederholt`);
+                        currentStepLogs.push(`🔄 Force: Scroll + Try Click Product`);
+                        console.log(`[STEP ${i + 1}] Loop detected, forcing action`);
+
+                        await page.mouse.wheel(0, 800);
+                        await page.waitForTimeout(500);
+
+                        sessionState.lastAction = 'force_scroll';
+                        sessionState.actionHistory.push('force_scroll');
+
+                        // Try auto-click product
+                        try {
+                            const productLinks = page.locator('a[href*="/p/"]').first();
+                            const visible = await productLinks.isVisible({ timeout: 2000 });
+                            if (visible) {
+                                currentStepLogs.push(`🎯 Auto-Click: Erstes Produkt`);
+                                await productLinks.click({ timeout: 3000 });
+                                await page.waitForLoadState('domcontentloaded', { timeout: 8000 });
+                                sessionState.actionHistory.push('auto_click_product');
+                            }
+                        } catch {
+                            currentStepLogs.push(`⚠️ Kein Produkt für Auto-Click gefunden`);
+                        }
+
+                        updateSessionState(page, sessionState);
+
+                        const scrollStep: LogStep = {
+                            step: currentStepName + " (Loop Break)",
+                            logs: currentStepLogs,
+                            image: (await page.screenshot({ type: 'png' })).toString('base64'),
+                            timestamp: Date.now()
+                        };
+                        structuredLog.push(scrollStep);
+                        sendSSE(controller, { type: 'step', step: scrollStep });
+                        continue;
+                    }
 
                     const screenshotBuffer = await page.screenshot({ type: 'png' });
                     const interactableElements = await getInteractableElements(page, elementSelector);
@@ -538,6 +613,8 @@ export async function POST(request: NextRequest) {
                         await page.mouse.wheel(0, 500);
                         sessionState.lastAction = 'scroll';
                         sessionState.actionHistory.push('scroll');
+
+                        updateSessionState(page, sessionState);
 
                         const scrollStep: LogStep = {
                             step: currentStepName,
@@ -570,7 +647,7 @@ export async function POST(request: NextRequest) {
                         continue;
                     }
 
-                    console.log(`[STEP ${i + 1}] Processing ${interactableElements.length} elements...`);
+                    console.log(`[STEP ${i + 1}] Processing...`);
 
                     currentStepLogs.push(`📊 Annotiere ${interactableElements.length} Elemente`);
                     const annotatedScreenshotBase64 = await annotateImage(screenshotBuffer, interactableElements);
@@ -580,7 +657,7 @@ export async function POST(request: NextRequest) {
 
                     let visualIntention;
                     try {
-                        visualIntention = await getVisualIntention(task, annotatedScreenshotBase64, personaPrompt, sessionState);
+                        visualIntention = await getVisualIntention(task, annotatedScreenshotBase64, personaPrompt, sessionState, page.url());
                         console.log(`[STEP ${i + 1}] Llava: "${visualIntention}"`);
                     } catch (error) {
                         currentStepLogs.push(`❌ Llava Fehler: ${error instanceof Error ? error.message : 'Unknown'}`);
@@ -657,7 +734,7 @@ export async function POST(request: NextRequest) {
                         currentStepLogs.push(``);
 
                         if (aiAction.action === 'click' && locator && (role === 'link' || role === 'button')) {
-                            currentStepLogs.push(`🖱️ Klicke auf "${text}" [ID ${chosenId}]`);
+                            currentStepLogs.push(`🖱️ Klicke auf "${text || 'Element'}" [ID ${chosenId}]`);
                             console.log(`[STEP ${i + 1}] Clicking ID ${chosenId}`);
 
                             const startUrl = page.url();
@@ -665,15 +742,9 @@ export async function POST(request: NextRequest) {
                             await page.waitForLoadState('domcontentloaded', { timeout: 8000 });
                             const endUrl = page.url();
 
-                            sessionState.currentUrl = endUrl;
+                            updateSessionState(page, sessionState);
                             sessionState.lastAction = 'click';
-                            sessionState.actionHistory.push(`click:${text}`);
-
-                            if (endUrl.includes('/suche/') || endUrl.includes('/search/') || endUrl.includes('?q=')) {
-                                sessionState.onSearchResults = true;
-                                sessionState.searchSubmitted = true;
-                                currentStepLogs.push(`   ✅ Auf Suchergebnissen!`);
-                            }
+                            sessionState.actionHistory.push(`click:${text?.substring(0, 20) || 'element'}`);
 
                             if (startUrl !== endUrl) {
                                 currentStepLogs.push(`   ✓ Navigation: ${endUrl}`);
@@ -681,7 +752,7 @@ export async function POST(request: NextRequest) {
                                 currentStepLogs.push(`   ✓ Geklickt`);
                             }
 
-                            logHistory.push(`Klick: ${text}`);
+                            logHistory.push(`Klick: ${text || 'Element'}`);
 
                         } else if (aiAction.action === 'type' && locator && role === 'textbox' && aiAction.textToType) {
                             currentStepLogs.push(`⌨️ Tippe "${aiAction.textToType}" [ID ${chosenId}]`);
@@ -689,19 +760,27 @@ export async function POST(request: NextRequest) {
 
                             await locator.fill(aiAction.textToType, { timeout: 8000 });
 
+                            // Auto-submit with URL detection
                             try {
                                 await locator.press('Enter', { timeout: 2000 });
                                 await page.waitForLoadState('domcontentloaded', { timeout: 8000 });
 
+                                // CRITICAL FIX: Wait for URL to update
+                                await page.waitForTimeout(1000);
+
                                 sessionState.searchText = aiAction.textToType;
                                 sessionState.searchSubmitted = true;
-                                sessionState.currentUrl = page.url();
 
-                                if (page.url().includes('/suche/') || page.url().includes('/search/')) {
-                                    sessionState.onSearchResults = true;
+                                updateSessionState(page, sessionState);
+
+                                const newUrl = page.url();
+                                currentStepLogs.push(`   ✓ Getippt + Enter`);
+                                currentStepLogs.push(`   URL: ${newUrl}`);
+
+                                if (newUrl.includes('/suche/') || newUrl.includes('/search/')) {
+                                    currentStepLogs.push(`   ✅ Auf Suchergebnissen erkannt!`);
                                 }
 
-                                currentStepLogs.push(`   ✓ Getippt + Enter`);
                                 logHistory.push(`Tippe: ${aiAction.textToType} + Enter`);
                             } catch {
                                 sessionState.searchText = aiAction.textToType;
@@ -732,7 +811,7 @@ export async function POST(request: NextRequest) {
 
                         } else {
                             currentStepLogs.push(`❌ Ungültige Aktion: ${aiAction.action} auf ${role}`);
-                            console.error(`[STEP ${i + 1}] Invalid action ${aiAction.action} on ${role}`);
+                            console.error(`[STEP ${i + 1}] Invalid action`);
                             structuredLog.push(currentStep);
                             sendSSE(controller, { type: 'step', step: currentStep });
                             break;
@@ -752,13 +831,13 @@ export async function POST(request: NextRequest) {
                     }
                 }
 
-                console.log(`[COMPLETE] Simulation finished with ${structuredLog.length} steps`);
+                console.log(`[COMPLETE] ${structuredLog.length} steps`);
                 sendSSE(controller, { type: 'progress', value: 100, status: 'Abgeschlossen!' });
                 sendSSE(controller, { type: 'complete', log: structuredLog });
 
             } catch (error: any) {
                 const errorMessage = stripAnsiCodes((error instanceof Error) ? error.message : "Unbekannter Fehler");
-                console.error("[ERROR] Simulation Error:", errorMessage);
+                console.error("[ERROR]", errorMessage);
                 sendSSE(controller, {
                     type: 'error',
                     message: errorMessage,
