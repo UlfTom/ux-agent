@@ -1,18 +1,64 @@
 // app/simulation/page.tsx
 "use client";
 
-import { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Rabbit, Copy, Check, Loader2, Info, Eye, Download, Settings } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { Button } from "@/app/_components/ui/button";
+import { Input } from "@/app/_components/ui/input";
+import { Label } from "@/app/_components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/_components/ui/select";
+import { Card, CardContent } from "@/app/_components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/_components/ui/tabs";
+import {
+    Copy, Check, Loader2, Download, Play,
+    ChevronDown, ChevronUp, Clock
+} from "lucide-react";
+import { gradients } from "@/app/_lib/design-tokens";
+import { motion } from 'framer-motion';
 
-type LogStep = { step: string; logs: string[]; image?: string; };
-const personaTypeOptions = [{ id: 'pragmatic', name: 'Pragmatisch' }, { id: 'inspirational', name: 'Inspirativ (Stöbernd)' },];
-const domainOptions = [{ id: 'ecommerce', name: 'E-Commerce' }, { id: 'travel', name: 'Reisebuchung' }, { id: 'finance', name: 'Finanzdienstleistung' },];
+// Timer Component
+function ElapsedTimer({ loading }: { loading: boolean }) {
+    const [elapsed, setElapsed] = useState(0);
+
+    useEffect(() => {
+        if (!loading) {
+            setElapsed(0);
+            return;
+        }
+
+        const startTime = Date.now();
+        const interval = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - startTime) / 1000));
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [loading]);
+
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+
+    return (
+        <span className="text-xs font-mono opacity-90 flex-shrink-0">
+            {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+        </span>
+    );
+}
+
+type LogStep = {
+    step: string;
+    logs: string[];
+    image?: string;
+    timestamp?: number; // Unix timestamp in ms
+};
+const personaTypeOptions = [
+    { id: 'pragmatic', name: 'Pragmatisch' },
+    { id: 'inspirational', name: 'Inspirativ' },
+];
+
+const domainOptions = [
+    { id: 'ecommerce', name: 'E-Commerce' },
+    { id: 'travel', name: 'Reisebuchung' },
+    { id: 'finance', name: 'Finanzdienstleistung' },
+];
 
 export default function SimulationPage() {
     const [url, setUrl] = useState('https://www.otto.de');
@@ -20,218 +66,556 @@ export default function SimulationPage() {
     const [loading, setLoading] = useState(false);
     const [log, setLog] = useState<LogStep[]>([]);
     const [progress, setProgress] = useState(0);
+    const [currentStatus, setCurrentStatus] = useState<string>('');
     const [copied, setCopied] = useState(false);
     const [browserType, setBrowserType] = useState('chrome');
     const [clickDepth, setClickDepth] = useState(7);
-    const [personasCount, setPersonasCount] = useState(1);
     const [domain, setDomain] = useState('ecommerce');
     const [personaType, setPersonaType] = useState('pragmatic');
+    const [activeTab, setActiveTab] = useState('all');
 
-    const handleStartSimulation = async (e: React.FormEvent<HTMLFormElement>) => {
+    const handleStartSimulation = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setCopied(false);
-        setProgress(30);
-
-        // --- HIER IST DER UI-SYNC-FIX ---
-        // Setze eine initiale Lade-Nachricht im Logbuch, *bevor* der Fetch startet
-        setLog([
-            {
-                step: "Simulation wird initialisiert...",
-                logs: ["Generiere Persona (mit Mistral)...", "Starte Playwright-Browser..."]
-            }
-        ]);
-        // --- ENDE DES FIXES ---
+        setProgress(0);
+        setCurrentStatus('Initialisiere...');
+        setLog([]);
 
         try {
             const res = await fetch('/api/run-simulation', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url, task, browserType, clickDepth, domain, personaType }),
             });
-            setProgress(70);
-            const data = await res.json();
-            if (!res.ok) {
-                // Überschreibe das Log mit den Fehler-Logs vom Server
-                setLog(data.log || [{ step: "FEHLER", logs: [data.message || 'Unbekannter Serverfehler'] }]);
-                throw new Error(data.message || 'Simulation fehlgeschlagen');
+
+            if (!res.ok || !res.body) {
+                throw new Error('Streaming nicht unterstützt');
             }
-            setLog(data.log); // Überschreibe das Lade-Log mit dem echten Log
-            setProgress(100);
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+
+                            if (data.type === 'progress') {
+                                setProgress(data.value);
+                                setCurrentStatus(data.status || '');
+                            }
+
+                            if (data.type === 'step') {
+                                setLog(prevLog => [...prevLog, data.step]);
+                                if (data.progress) setProgress(data.progress);
+                            }
+
+                            if (data.type === 'complete') {
+                                setLog(data.log);
+                                setProgress(100);
+                                setCurrentStatus('Abgeschlossen');
+
+                                if ('Notification' in window && Notification.permission === 'granted') {
+                                    new Notification('Simulation abgeschlossen! 🎉', {
+                                        body: `${data.log.length} Schritte durchgeführt`,
+                                    });
+                                }
+                            }
+
+                            if (data.type === 'error') {
+                                setLog(data.log || [{ step: "FEHLER", logs: [data.message] }]);
+                                setProgress(0);
+                                setCurrentStatus('Fehler');
+                            }
+
+                        } catch (parseError) {
+                            console.error('Parse Error:', parseError);
+                        }
+                    }
+                }
+            }
+
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : "Unbekannter Fehler";
-            // Füge den Fehler zum bestehenden (Lade-)Log hinzu, falls es noch leer ist
-            if (log.length <= 1) {
-                setLog(prevLog => [...prevLog, { step: "CLIENT-FEHLER", logs: [errorMsg] }]);
-            }
+            setLog([{ step: "CLIENT-FEHLER", logs: [errorMsg] }]);
             setProgress(0);
+            setCurrentStatus('Fehler');
         } finally {
             setLoading(false);
-            setTimeout(() => setProgress(0), 1000);
         }
     };
 
     const handleCopyLog = () => {
         if (log.length === 0) return;
         const logText = log.map(step => `${step.step}\n${step.logs.join('\n')}`).join('\n\n');
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(logText).then(() => {
-                setCopied(true); setTimeout(() => setCopied(false), 2000);
-            }).catch(err => console.warn('Fehler beim Kopieren:', err));
-        } else {
-            const textArea = document.createElement("textarea"); textArea.value = logText;
-            document.body.appendChild(textArea); textArea.focus(); textArea.select();
-            try { document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000); }
-            catch (err) { console.error('Fallback-Kopieren fehlgeschlagen:', err); }
-            document.body.removeChild(textArea);
-        }
+        navigator.clipboard.writeText(logText).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
     };
 
     const handleDownloadZip = async () => {
         if (log.length === 0) return;
         try {
             const res = await fetch('/api/download-zip', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(log)
             });
             if (!res.ok) throw new Error('Zip-Download fehlgeschlagen');
             const blob = await res.blob();
             const downloadUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = downloadUrl; a.download = 'simulation_debug.zip';
-            document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(downloadUrl);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = 'simulation_debug.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
         } catch (error) {
-            alert(error instanceof Error ? error.message : "UnbekNannter Fehler");
+            alert(error instanceof Error ? error.message : "Unbekannter Fehler");
         }
     };
 
+    const stepsWithImages = log.filter(step => step.image);
+    const errorSteps = log.filter(step =>
+        step.step.includes('FEHLER') || step.logs.some(l => l.includes('❌'))
+    );
+
     return (
-        <main className="container mx-auto max-w-5xl px-4 py-32">
-            <div className="space-y-12">
+        <div className="min-h-screen bg-background pt-20 mt-20">
 
-                <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200">
-                    <CardHeader className="p-0 mb-6">
-                        <CardTitle className="text-2xl font-bold">Simulationseinstellungen</CardTitle>
-                        <CardDescription>
-                            Definiere die Parameter für deinen nächsten Testlauf.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <form onSubmit={handleStartSimulation} className="space-y-6">
+            <div className="container mx-auto max-w-[1400px] px-6 py-8">
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="domain">Domain (Gesperrt)</Label>
-                                    <Select value={domain} onValueChange={setDomain} disabled>
-                                        <SelectTrigger id="domain"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {domainOptions.map(opt => (
-                                                <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="personaType">Persona-Typ (Gesperrt)</Label>
-                                    <Select value={personaType} onValueChange={setPersonaType} disabled>
-                                        <SelectTrigger id="personaType"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {personaTypeOptions.map(opt => (
-                                                <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="personas">Anzahl (Gesperrt)</Label>
-                                    <Input id="personas" type="number" value={personasCount} disabled readOnly className="cursor-not-allowed bg-slate-50" />
-                                </div>
-                            </div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t">
-                                <div className="space-y-2">
-                                    <Label htmlFor="browser">Browser</Label>
-                                    <Select value={browserType} onValueChange={setBrowserType}>
-                                        <SelectTrigger id="browser"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="chrome">Chrome</SelectItem>
-                                            <SelectItem value="firefox">Firefox</SelectItem>
-                                            <SelectItem value="safari">Safari</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="clicks">Max. Aktionen</Label>
-                                    <Input id="clicks" type="number" value={clickDepth} onChange={(e) => setClickDepth(parseInt(e.target.value, 10))} min="1" max="10" />
-                                </div>
-                            </div>
+                    {/* LEFT: Configuration (5 cols) */}
+                    <div className="lg:col-span-5">
+                        <div className="sticky top-32">  {/* ← NEU: Sticky wrapper */}
+                            <Card className="shadow-sm">
 
-                            <div className="space-y-6 pt-6 border-t">
-                                <div className="space-y-2">
-                                    <Label htmlFor="url">Start-URL</Label>
-                                    <Input id="url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="task">Aufgabe für die KI</Label>
-                                    <Input id="task" type="text" value={task} onChange={(e) => setTask(e.target.value)} required />
-                                </div>
-                            </div>
+                                <CardContent className="p-6">
+                                    <h2 className="text-base font-semibold font-body mb-6">Configuration</h2>
 
-                            {loading && <Progress value={progress} className="w-full" />}
-                            <Button type="submit" disabled={loading} className="w-full text-lg" size="lg">
-                                {loading ? (<><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Simulation läuft...</>)
-                                    : (<><Rabbit className="mr-2 h-5 w-5" /> Simulation starten</>)}
-                            </Button>
-                        </form>
-                    </CardContent>
-                </div>
+                                    <form onSubmit={handleStartSimulation} className="space-y-6">
 
-                <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200">
-                    <CardHeader className="p-0 mb-6">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <CardTitle>Simulations-Logbuch</CardTitle>
-                                <CardDescription>
-                                    Visuelle Schritte und Aktionen des Agenten.
-                                </CardDescription>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button variant="outline" size="icon" onClick={handleCopyLog} disabled={log.length === 0} title="Log kopieren">
-                                    {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                </Button>
-                                <Button variant="outline" size="icon" onClick={handleDownloadZip} disabled={log.length === 0} title="Debug-Zip herunterladen">
-                                    <Download className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="space-y-6 overflow-y-auto h-[600px] p-1 border rounded-md">
-                            {log.length > 0 ? (
-                                log.map((step, index) => (
-                                    <div key={`${step.step}-${index}`} className="border-b last-border-b-0">
-                                        <div className="p-3">
-                                            <h3 className="font-semibold text-lg">{step.step}</h3>
+                                        {/* URL */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="url" className="text-sm font-body font-medium">
+                                                Target URL
+                                            </Label>
+                                            <Input
+                                                id="url"
+                                                type="url"
+                                                value={url}
+                                                onChange={(e) => setUrl(e.target.value)}
+                                                className="font-body h-10"
+                                                placeholder="https://example.com"
+                                                required
+                                            />
                                         </div>
-                                        {step.image && (
-                                            <div className="bg-slate-100 p-2">
-                                                <img src={`data:image/png;base64,${step.image}`} alt={`Screenshot für ${step.step}`} className="w-full rounded-md border-2 border-slate-300" />
-                                            </div>
+
+                                        {/* Task */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="task" className="text-sm font-body font-medium">
+                                                Task Description
+                                            </Label>
+                                            <Input
+                                                id="task"
+                                                type="text"
+                                                value={task}
+                                                onChange={(e) => setTask(e.target.value)}
+                                                className="font-body h-10"
+                                                placeholder="Find a product..."
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Browser */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="browser" className="text-sm font-body font-medium">
+                                                Browser
+                                            </Label>
+                                            <Select value={browserType} onValueChange={setBrowserType}>
+                                                <SelectTrigger className="font-body h-10 bg-background">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-background">
+                                                    <SelectItem value="chrome">Chrome</SelectItem>
+                                                    <SelectItem value="firefox">Firefox</SelectItem>
+                                                    <SelectItem value="safari">Safari</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {/* Max Actions - NUMBER INPUT */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="clickDepth" className="text-sm font-body font-medium">
+                                                Max Actions
+                                            </Label>
+                                            <Input
+                                                id="clickDepth"
+                                                type="number"
+                                                min="1"
+                                                max="20"
+                                                value={clickDepth}
+                                                onChange={(e) => setClickDepth(parseInt(e.target.value, 10) || 1)}
+                                                className="font-body h-10"
+                                            />
+                                        </div>
+
+                                        {/* Domain */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="domain" className="text-sm font-body font-medium">
+                                                Domain
+                                            </Label>
+                                            <Select value={domain} onValueChange={setDomain} disabled>
+                                                <SelectTrigger className="font-body h-10 bg-muted/50">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-background">
+                                                    {domainOptions.map(opt => (
+                                                        <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-xs text-muted-foreground font-body">Currently locked</p>
+                                        </div>
+
+                                        {/* Persona Type */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="personaType" className="text-sm font-body font-medium">
+                                                Persona Type
+                                            </Label>
+                                            <Select value={personaType} onValueChange={setPersonaType} disabled>
+                                                <SelectTrigger className="font-body h-10 bg-muted/50">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-background">
+                                                    {personaTypeOptions.map(opt => (
+                                                        <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <p className="text-xs text-muted-foreground font-body">Currently locked</p>
+                                        </div>
+
+                                        {/* Submit Button with Progress & Timer */}
+                                        <div className="relative">
+                                            <Button
+                                                type="submit"
+                                                disabled={loading}
+                                                className="w-full h-11 relative overflow-hidden border-0 text-white font-body font-medium shadow-sm bg-transparent"
+                                            >
+                                                {/* Base Gradient */}
+                                                <div
+                                                    className="absolute inset-0 transition-opacity duration-300"
+                                                    style={{
+                                                        background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)`,
+                                                        opacity: loading ? 0.5 : 1
+                                                    }}
+                                                />
+
+                                                {/* Progress Fill */}
+                                                {loading && (
+                                                    <motion.div
+                                                        className="absolute inset-y-0 left-0"
+                                                        initial={{ width: 0 }}
+                                                        animate={{ width: `${progress}%` }}
+                                                        transition={{ duration: 0.3 }}
+                                                        style={{
+                                                            background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)`,
+                                                            filter: 'brightness(1.3)'
+                                                        }}
+                                                    />
+                                                )}
+
+                                                {/* Content */}
+                                                <span className="relative z-10 flex items-center justify-center gap-3 px-4">
+                                                    {loading ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+
+                                                            {/* Timer - Left side */}
+                                                            <ElapsedTimer loading={loading} />
+
+                                                            {/* Status - Center */}
+                                                            <span className="flex-1 text-center min-w-0 truncate">
+                                                                {currentStatus || 'Running...'}
+                                                            </span>
+
+                                                            {/* Progress - Right side */}
+                                                            <span className="text-xs opacity-90 flex-shrink-0 font-mono">
+                                                                {progress}%
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Play className="h-4 w-4" />
+                                                            Start Simulation
+                                                        </>
+                                                    )}
+                                                </span>
+                                            </Button>
+                                        </div>
+
+
+                                    </form>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+
+
+                    {/* RIGHT: Results (7 cols) */}
+                    <div className="lg:col-span-7">
+
+                        {/* Header */}
+
+                        {/* Page Title */}
+                        <div className="mb-8">
+                            <h1 className="text-2xl font-bold font-headline tracking-tight mb-2">Simulation</h1>
+                            <p className="text-sm text-muted-foreground font-body">
+                                Test your website with AI-powered user agents
+                            </p>
+                        </div>
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-base font-semibold font-body">Execution Log</h2>
+                                <p className="text-sm text-muted-foreground font-body mt-1">
+                                    {log.length > 0 ? `${log.length} steps recorded` : 'No data yet'}
+                                </p>
+                            </div>
+
+                            {log.length > 0 && (
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleCopyLog}
+                                        className="font-body h-9"
+                                    >
+                                        {copied ? (
+                                            <>
+                                                <Check className="h-4 w-4 mr-2" />
+                                                Copied
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Copy className="h-4 w-4 mr-2" />
+                                                Copy
+                                            </>
                                         )}
-                                        <pre className="text-sm bg-white text-slate-600 p-4 overflow-x-auto whitespace-pre-wrap">
-                                            {step.logs.join('\n')}
-                                        </pre>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-center text-slate-500 py-20">
-                                    <Eye className="mx-auto h-12 w-12 text-slate-400" />
-                                    <p className="mt-2">Simulation noch nicht gestartet...</p>
+                                    </Button>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleDownloadZip}
+                                        className="font-body h-9"
+                                    >
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Export
+                                    </Button>
                                 </div>
                             )}
                         </div>
-                    </CardContent>
-                </div>
 
+                        {/* Timeline View - Replace entire Tabs section */}
+                        {log.length > 0 ? (
+                            <div className="space-y-3">
+                                {/* Timeline Header */}
+                                <div className="flex items-center gap-3 pb-3 border-b">
+                                    <div className="h-2 w-2 rounded-full bg-primary" />
+                                    <p className="text-xs font-medium text-muted-foreground font-mono">
+                                        EXECUTION TIMELINE
+                                    </p>
+                                </div>
+
+                                {/* Timeline Items */}
+                                <div className="space-y-0">
+                                    {log.map((step, index) => (
+                                        <TimelineStepCard
+                                            key={index}
+                                            step={step}
+                                            index={index}
+                                            isLast={index === log.length - 1}
+                                            startTime={log[0].timestamp}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <Card>
+                                <CardContent className="p-12 text-center">
+                                    <p className="text-sm font-medium font-body mb-2">No simulation data</p>
+                                    <p className="text-xs text-muted-foreground font-body">
+                                        Start a simulation to see results
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+
+
+                    </div>
+
+                </div>
             </div>
-        </main>
+        </div>
     );
 }
+
+// ===== TIMELINE STEP CARD =====
+function TimelineStepCard({
+    step,
+    index,
+    isLast,
+    startTime
+}: {
+    step: LogStep;
+    index: number;
+    isLast: boolean;
+    startTime?: number;
+}) {
+    const [imageExpanded, setImageExpanded] = useState(false);
+    const isError = step.step.includes('FEHLER') || step.logs.some(l => l.includes('❌'));
+    const isSuccess = step.step.includes('abgeschlossen') || step.logs.some(l => l.includes('✅ Aufgabe'));
+
+    // Calculate elapsed time
+    const elapsed = step.timestamp && startTime
+        ? Math.round((step.timestamp - startTime) / 1000) // seconds
+        : null;
+
+    const elapsedFormatted = elapsed !== null
+        ? elapsed < 60
+            ? `${elapsed}s`
+            : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`
+        : null;
+
+    // Format timestamp
+    const timeFormatted = step.timestamp
+        ? new Date(step.timestamp).toLocaleTimeString('de-DE', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        })
+        : '--:--:--';
+
+    return (
+        <div className="relative">
+            {/* Timeline Line */}
+            {!isLast && (
+                <div className="absolute left-[19px] top-[40px] bottom-[-12px] w-[2px] bg-border" />
+            )}
+
+            <div className="flex gap-4">
+                {/* Timeline Dot */}
+                <div className="relative flex-shrink-0">
+                    <div className={`
+            h-10 w-10 rounded-full flex items-center justify-center font-mono text-xs font-bold
+            ${isError
+                            ? 'bg-destructive/20 text-destructive border-2 border-destructive'
+                            : isSuccess
+                                ? 'bg-green-500/20 text-green-600 border-2 border-green-500'
+                                : 'bg-primary/10 text-primary border-2 border-primary/30'
+                        }
+          `}>
+                        {String(index + 1).padStart(2, '0')}
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 pb-6">
+                    <Card className={`${isError ? 'border-destructive/50 bg-destructive/5' : ''} shadow-sm`}>
+                        <CardContent className="p-4">
+
+                            {/* Header */}
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold font-body mb-1">{step.step}</p>
+
+                                    {/* Meta Info */}
+                                    <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
+                                        <div className="flex items-center gap-1.5">
+                                            <Clock className="h-3 w-3" />
+                                            <span>{timeFormatted}</span>
+                                        </div>
+
+                                        {elapsedFormatted && (
+                                            <div className="flex items-center gap-1.5">
+                                                <span>+{elapsedFormatted}</span>
+                                            </div>
+                                        )}
+
+                                        {isError && (
+                                            <div className="flex items-center gap-1.5 text-destructive font-semibold">
+                                                <span>ERROR</span>
+                                            </div>
+                                        )}
+
+                                        {isSuccess && (
+                                            <div className="flex items-center gap-1.5 text-green-600 font-semibold">
+                                                <span>SUCCESS</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {step.image && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setImageExpanded(!imageExpanded)}
+                                        className="h-8 px-2 flex-shrink-0"
+                                    >
+                                        {imageExpanded ? (
+                                            <ChevronUp className="h-4 w-4" />
+                                        ) : (
+                                            <ChevronDown className="h-4 w-4" />
+                                        )}
+                                    </Button>
+                                )}
+                            </div>
+
+                            {/* Logs */}
+                            <div className="bg-muted/50 rounded-lg p-3 border border-border/50">
+                                <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono leading-relaxed">
+                                    {step.logs.join('\n')}
+                                </pre>
+                            </div>
+
+                            {/* Screenshot */}
+                            {step.image && imageExpanded && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="mt-3 border rounded-lg overflow-hidden"
+                                >
+                                    <img
+                                        src={`data:image/png;base64,${step.image}`}
+                                        alt={step.step}
+                                        className="w-full"
+                                    />
+                                </motion.div>
+                            )}
+
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}
+

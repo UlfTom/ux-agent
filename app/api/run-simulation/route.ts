@@ -1,12 +1,10 @@
 // app/api/run-simulation/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
-import { chromium, firefox, webkit, Page, Locator } from 'playwright';
+import { NextRequest } from 'next/server';
+import { chromium, firefox, webkit, Page } from 'playwright';
 import sharp from 'sharp';
 
-type LogStep = { step: string; logs: string[]; image?: string; };
-
-// --- 1. Die "Hände": (KORRIGIERTE TYPDEFINITION) ---
+type LogStep = { step: string; logs: string[]; image?: string; timestamp?: number; };
 
 type InteractableElement = {
     id: number;
@@ -18,28 +16,80 @@ type InteractableElement = {
     isHoverTarget: boolean;
 };
 
-async function getInteractableElements(page: Page, baseSelector: string): Promise<InteractableElement[]> {
+type SessionState = {
+    searchText: string | null;
+    searchSubmitted: boolean;
+    onSearchResults: boolean;
+    onProductPage: boolean;
+    currentUrl: string;
+    lastAction: string;
+    actionHistory: string[];
+};
+
+function sendSSE(controller: ReadableStreamDefaultController, data: any) {
+    const message = `data: ${JSON.stringify(data)}\n\n`;
+    controller.enqueue(new TextEncoder().encode(message));
+}
+
+async function retryAsync<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 2,
+    delayMs: number = 500
+): Promise<T> {
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, delayMs * attempt));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
+async function getInteractableElements(page: Page, baseSelector: string, maxElements: number = 80): Promise<InteractableElement[]> {
     const elements: InteractableElement[] = [];
     const locators = page.locator(baseSelector);
     const count = await locators.count();
     let cleanIdCounter = 0;
 
-    for (let i = 0; i < count; i++) {
+    const maxCount = Math.min(count, maxElements);
+
+    for (let i = 0; i < maxCount; i++) {
         const locator = locators.nth(i);
         let box: { x: number; y: number; width: number; height: number } | null = null;
+
         try {
-            box = await locator.boundingBox({ timeout: 100 });
+            box = await locator.boundingBox({ timeout: 50 });
         } catch (e) {
             continue;
         }
-        if (!box || box.width === 0 || box.height === 0) {
+
+        if (!box || box.width === 0 || box.height === 0) continue;
+
+        // ✅ NEW: Check if element is visible
+        try {
+            const isVisible = await locator.isVisible({ timeout: 50 });
+            if (!isVisible) {
+                console.log(`[SKIP] Element ${i} not visible`);
+                continue;
+            }
+        } catch (e) {
+            console.log(`[SKIP] Element ${i} visibility check failed`);
             continue;
         }
 
         const tagName = await locator.evaluate(el => el.tagName.toUpperCase());
         let role: 'link' | 'button' | 'textbox' = 'button';
+
         if (tagName === 'A') role = 'link';
         if (tagName === 'INPUT' || tagName === 'TEXTAREA') role = 'textbox';
+
         const ariaRole = await locator.getAttribute('role');
         if (ariaRole === 'link' || ariaRole === 'listitem' || ariaRole === 'option') role = 'link';
         if (ariaRole === 'button') role = 'button';
@@ -47,398 +97,685 @@ async function getInteractableElements(page: Page, baseSelector: string): Promis
 
         let text = (await locator.innerText() || await locator.getAttribute('aria-label') || '').trim();
         let placeholder: string | null = null;
+
         if (role === 'textbox') {
             placeholder = (await locator.getAttribute('placeholder')) || null;
             if (!text && placeholder) text = placeholder;
         }
-        const isHoverTarget = (tagName === 'A' && (await locator.evaluate(el => el.closest('nav') !== null || el.closest('[role="navigation"]') !== null)));
+
+        // ✅ NEW: Skip elements without meaningful text
+        if (!text || text === 'Kein Text') {
+            console.log(`[SKIP] Element ${i} has no text`);
+            continue;
+        }
 
         elements.push({
             id: cleanIdCounter,
             realIndex: i,
-            role: role,
-            box: box,
-            text: text.substring(0, 100) || 'Kein Text',
-            placeholder: placeholder,
-            isHoverTarget: isHoverTarget,
+            role,
+            box,
+            text: text.substring(0, 80),
+            placeholder,
+            isHoverTarget: false,
         });
+
         cleanIdCounter++;
     }
+
     return elements;
 }
 
-// --- 2. Die "Augen": (Annotations-Funktion) ---
 async function annotateImage(
     screenshotBuffer: Buffer,
     elements: InteractableElement[]
 ): Promise<string> {
     const { width, height } = await sharp(screenshotBuffer).metadata();
-    const svgOverlays = elements.map(el => `
+
+    const elementsToAnnotate = elements.slice(0, 50);
+
+    const svgOverlays = elementsToAnnotate.map(el => `
     <rect x="${el.box.x}" y="${el.box.y}" width="${el.box.width}" height="${el.box.height}" 
-          stroke="#FF0000" fill="none" stroke-width="2"/>
+          fill="none" stroke="red" stroke-width="2"/>
     <text x="${el.box.x + 5}" y="${el.box.y + 20}" 
-          font-family="Arial" font-size="16" fill="white" 
-          stroke="black" stroke-width="0.5"
-          style="background-color: #FF0000; padding: 2px 4px; border-radius: 2px;">
-      ${el.id}
-    </text>
+          fill="red" font-size="16" font-weight="bold" font-family="Arial">${el.id}</text>
   `).join('');
+
     const svg = `<svg width="${width}" height="${height}">${svgOverlays}</svg>`;
+
     const annotatedBuffer = await sharp(screenshotBuffer)
-        .composite([
-            { input: Buffer.from(svg), top: 0, left: 0 }
-        ])
+        .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
         .png()
         .toBuffer();
+
     return annotatedBuffer.toString('base64');
 }
 
-// --- 3. Das "Gott-Gehirn": (Persona-Erstellung) ---
 async function generatePersonaPrompt(task: string, domain: string, personaType: string): Promise<string> {
-    // (Funktion bleibt gleich, nutzt Mistral)
     const prompt = `
-    Du bist ein Senior UX Researcher. Deine Aufgabe ist es, eine realistische Persona (n=1) zu entwerfen, die einen Usability-Test durchführen wird.
-    Kontext:
-    - Domain: "${domain}"
-    - Persona-Typ: "${personaType}"
-    - Aufgabe: "${task}"
-    Erstelle einen System-Prompt (eine Anweisung) für einen KI-Agenten, der diese Persona spielen soll.
-    Der Prompt muss in der "Du"-Form geschrieben sein und eine kurze Motivation enthalten, die den Persona-Typ (${personaType}) und die Aufgabe (${task}) widerspiegelt.
-    Antworte NUR mit dem reinen System-Prompt, ohne Begrüßung oder Anführungszeichen.
-  `;
+Du bist ein Senior UX Researcher. Erstelle eine **realistische, lebendige Persona** für einen Usability-Test.
+
+Kontext:
+- Domain: "${domain}"
+- Persona-Typ: "${personaType}"
+- Aufgabe: "${task}"
+
+**Wichtig:**
+1. Die Persona soll ein ECHTER MENSCH sein
+2. Die Demografie soll zur Aufgabe passen
+3. Schreibe in "Du"-Form
+4. Gib der Persona: Name, Alter, Beruf, Lebenssituation, Motivation
+
+Antworte NUR mit dem Persona-Text in "Du"-Form.
+`;
+
     try {
-        const response = await fetch('http://localhost:11434/api/generate', {
-            method: 'POST', body: JSON.stringify({
-                model: 'mistral', prompt: prompt, stream: false,
-            }),
-        });
-        if (!response.ok) throw new Error(`Ollama API-Fehler (Persona): ${response.statusText}`);
-        const body = await response.json();
-        return body.response.trim().replace(/^"|"$/g, '');
+        return await retryAsync(async () => {
+            const response = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                body: JSON.stringify({
+                    model: 'mistral',
+                    prompt,
+                    stream: false,
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Ollama Fehler: ${response.statusText}`);
+
+            const body = await response.json();
+            return body.response.trim().replace(/^\"|\"$/g, '');
+        }, 2, 500);
     } catch (e: any) {
-        console.error("Fehler bei Persona-Generierung:", e);
-        return `Du bist ein Standard-Benutzer, der die Aufgabe ('${task}') erledigen soll.`;
+        console.error("Persona-Generierung fehlgeschlagen:", e);
+        return `Du bist ein durchschnittlicher Nutzer, der die Aufgabe "${task}" erledigen möchte.`;
     }
 }
 
-// --- 4. Das "Piloten-Auge": (Llava - Visuelle Absicht) ---
 async function getVisualIntention(
     task: string,
-    logHistory: string[],
     annotatedScreenshotBase64: string,
-    personaPrompt: string
+    personaPrompt: string,
+    sessionState: SessionState
 ): Promise<string> {
-
     const isPragmatic = personaPrompt.toLowerCase().includes('pragmatisch');
-    const lastActionWasType = logHistory.at(-1)?.includes("Aktion: Erfolgreich getippt");
 
     const prompt = `
-    ${personaPrompt} 
-    Deine Aufgabe: "${task}"
-    Dein Gedächtnis: ${logHistory.join(' -> ')}
+${personaPrompt}
 
-    Schau dir das Bild an. Ich habe alle interaktiven Elemente mit **roten Boxen und einer ID-Nummer** (z.B. [0], [1]) markiert.
-    
-    Was ist dein nächster logischer Schritt? 
-    
-    *** WICHTIGE REGELN (BEFOLGE SIE!) ***
-    1. **PRIO 1 (Cookie):** Wenn du einen Cookie-Banner (z.B. mit "OK") siehst, klicke ZUERST auf die ID-Nummer der "OK"-Box.
-    
-    2. **DEINE PERSONA-REGEL:**
-       ${isPragmatic
-            ? "Du bist PRAGMATISCH. Dein Ziel ist die SUCHE. Finde die ID der 'Wonach suchst du?'-Box, um zu tippen."
-            : "Du bist INSPIRATIV. Stöbere gerne. Klicke auf interessante Kategorien wie [Damen-Mode] oder [Sale]."
-        }
+Deine Aufgabe: "${task}"
 
-    3. **SUCH-REGEL:**
-       ${lastActionWasType
-            ? "DU HAST GERADE GETIPPT. Dein nächster Schritt MUSS sein, auf den 'Suchen'-Button (das Lupen-Icon [2]) zu klicken, um die Suche abzuschicken."
-            : "Wenn du tippen willst, wähle eine 'textbox'."
-        }
+CURRENT STATE:
+- Search typed: ${sessionState.searchText || 'none'}
+- Search submitted: ${sessionState.searchSubmitted}
+- On search results: ${sessionState.onSearchResults}
+- Last action: ${sessionState.lastAction}
 
-    4. **SCROLL-REGEL:** Scrolle NUR, wenn du dein Ziel (z.B. die Suchleiste) absolut nicht auf dem Bildschirm sehen kannst.
-    
-    Beschreibe deine Absicht (was du tun willst) und auf welche ID-Nummer du dich beziehst.
-    Antworte in einem einzigen, kurzen Satz.
-    
-    Beispiel 1: Ich bin pragmatisch, also tippe ich 'Winter-Jeans' in die Suchleiste [1].
-    Beispiel 2: Ich habe getippt, jetzt klicke ich auf das Lupen-Icon [2], um zu suchen.
-    Beispiel 3: Ich sehe mein Ziel nicht, ich scrolle nach unten.
-  `;
+Schau das Bild an. Rote Boxen mit IDs sind interaktiv.
+
+RULES:
+1. Cookie-Banner? Klicke "OK" ZUERST!
+2. ${isPragmatic ? 'Nutze die Suche!' : 'Stöbere!'}
+3. ${sessionState.searchText && !sessionState.searchSubmitted ? '⚠️ Du hast getippt aber NICHT abgeschickt! Klicke Suchen-Button JETZT!' : ''}
+4. ${sessionState.onSearchResults ? '✅ Auf Suchergebnissen! Klicke PRODUKT!' : ''}
+
+Beschreibe deine Absicht in EINEM Satz mit ID [X].
+
+Beispiele:
+- "Ich klicke auf OK [12]"
+- "Ich tippe 'Winter-Jeans' in [1]"
+- "Ich klicke auf Lupen-Icon [2]"
+- "Ich klicke auf Produkt [45]"
+
+Antworte JETZT:
+`;
+
     try {
-        const response = await fetch('http://localhost:11434/api/generate', {
-            method: 'POST', body: JSON.stringify({
-                model: 'llava', prompt: prompt,
-                images: [annotatedScreenshotBase64],
-                stream: false,
-            }),
-        });
-        if (!response.ok) throw new Error(`Ollama API-Fehler (Llava): ${response.statusText}`);
-        const body = await response.json();
-        return body.response.trim();
+        return await retryAsync(async () => {
+            const response = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                body: JSON.stringify({
+                    model: 'llava',
+                    prompt,
+                    images: [annotatedScreenshotBase64],
+                    stream: false,
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Llava Fehler: ${response.statusText}`);
+
+            const body = await response.json();
+            return body.response.trim();
+        }, 2, 500);
     } catch (e: any) {
-        console.error("Fehler beim Aufruf von Ollama (Llava):", e); throw e;
+        console.error("Llava-Aufruf fehlgeschlagen:", e);
+        throw new Error(`Llava nicht erreichbar: ${e.message}`);
     }
 }
 
-// --- 5. Das "Piloten-Gehirn": (Mistral - Logik & JSON) ---
 async function getLogicalAction(
     visualIntention: string,
     interactableElements: InteractableElement[],
-    task: string
+    task: string,
+    sessionState: SessionState
 ): Promise<any> {
 
+    const idMatch = visualIntention.match(/\[(\d+)\]/);
+    const suggestedId = idMatch ? parseInt(idMatch[1], 10) : null;
+
     const prompt = `
-    Du bist ein Logik-Modul (Modul 2). Deine Aufgabe ist es, die Absicht eines "Piloten" (Modul 1) in einen sauberen JSON-Befehl umzusetzen.
-    
-    Absicht des Piloten (Rohtext): "${visualIntention}"
-    Aufgabe: "${task}"
-    
-    Hier ist die "Speisekarte" (JSON-Liste) der Elemente, die auf der Seite verfügbar sind:
-    ${JSON.stringify(interactableElements, null, 2)}
-    
-    Finde das EINE Element aus der Liste, das am besten zur Absicht des Piloten passt.
-    
-    **Deine Logik-Regeln:**
-    1. Wenn die Absicht "tippen" oder "suchen" ist, MUSS deine Aktion "type" sein und das Ziel MUSS die "role: 'textbox'" sein.
-    2. Wenn die Absicht "klicken" oder "auswählen" ist, MUSS deine Aktion "click" sein und das Ziel MUSS "role: 'link'" oder "role: 'button'" sein.
-    3. Wenn die Absicht "hovern" oder "Menü öffnen" ist, MUSS deine Aktion "hover" sein.
-    4. Wenn die Absicht "scrollen" ist, MUSS deine Aktion "scroll" sein.
-    5. Wenn der Pilot eine ID erwähnt (z.B. "klicke [3]"), finde das Element mit "id: 3".
-    Antworte NUR mit einem JSON-Objekt in einem der folgenden Formate:
-    { "action": "click", "idToInteract": <id>, "rationale": "Begründung basierend auf Absicht." }
-    ODER
-    { "action": "type", "idToInteract": <id>, "textToType": "<der Text für die Aufgabe, z.B. '${task}'>", "rationale": "Begründung." }
-    ODER
-    { "action": "hover", "idToInteract": <id>, "rationale": "Begründung." }
-    ODER
-    { "action": "scroll", "direction": "down", "pixels": 500, "rationale": "Pilot will scrollen." }
-    ODER
-    { "action": "finish", "rationale": "Pilot ist fertig." }
-  `;
+Du bist Logik-Modul. Setze Absicht in JSON um.
+
+Pilot sagt: "${visualIntention}"
+Aufgabe: "${task}"
+
+STATE:
+- Search typed: "${sessionState.searchText || 'none'}"
+- Search submitted: ${sessionState.searchSubmitted}
+- On search results: ${sessionState.onSearchResults}
+- Last: ${sessionState.actionHistory.slice(-2).join(', ')}
+
+${suggestedId !== null ? `⚠️ Pilot erwähnte ID ${suggestedId}! VERWENDE SIE!` : ''}
+
+Elemente (Top 30):
+${JSON.stringify(interactableElements.slice(0, 30), null, 2)}
+
+RULES:
+1. Pilot ID ${suggestedId} → VERWENDE SIE!
+2. "tippen" → NUR role: "textbox"
+3. "klicken" → NUR role: "link" oder "button"
+4. ${sessionState.searchText && !sessionState.searchSubmitted ? '⚠️ Search NOT submitted! Click search button!' : ''}
+
+Antworte NUR mit JSON:
+{ "action": "type", "idToInteract": <num>, "textToType": "<text>", "rationale": "..." }
+{ "action": "click", "idToInteract": <num>, "rationale": "..." }
+{ "action": "scroll", "direction": "down", "pixels": 500, "rationale": "..." }
+{ "action": "finish", "rationale": "..." }
+`;
+
     try {
-        const response = await fetch('http://localhost:11434/api/generate', {
-            method: 'POST', body: JSON.stringify({
-                model: 'mistral', prompt: prompt, format: 'json', stream: false,
-            }),
-        });
-        if (!response.ok) throw new Error(`Ollama API-Fehler (Mistral-Logik): ${response.statusText}`);
-        const body = await response.json();
-        const rawResponse = body.response as string;
-        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-        if (!jsonMatch || !jsonMatch[0]) {
-            throw new Error(`KI (Mistral) hat kein gültiges JSON zurückgegeben. Antwort war: ${rawResponse}`);
+        const actionJson = await retryAsync(async () => {
+            const response = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                body: JSON.stringify({
+                    model: 'mistral',
+                    prompt,
+                    format: 'json',
+                    stream: false,
+                }),
+            });
+
+            if (!response.ok) throw new Error(`Mistral Fehler: ${response.statusText}`);
+
+            const body = await response.json();
+            const rawResponse = body.response as string;
+            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+
+            if (!jsonMatch || !jsonMatch[0]) {
+                throw new Error(`Mistral gab kein JSON zurück`);
+            }
+
+            return JSON.parse(jsonMatch[0]);
+        }, 2, 500);
+
+        const chosenId = parseInt(String(actionJson.idToInteract), 10);
+        const elementToInteract = interactableElements.find(el => el.id === chosenId);
+
+        // Smart Validation
+        if (actionJson.action === 'type') {
+            if (!elementToInteract || elementToInteract.role !== 'textbox') {
+                console.error(`❌ Type on wrong element ID ${chosenId}`);
+
+                const textboxes = interactableElements.filter(el => el.role === 'textbox');
+
+                if (textboxes.length > 0) {
+                    if (suggestedId !== null) {
+                        const suggestedElement = interactableElements.find(el => el.id === suggestedId);
+                        if (suggestedElement && suggestedElement.role === 'textbox') {
+                            actionJson.idToInteract = suggestedId;
+                            return actionJson;
+                        }
+                    }
+
+                    actionJson.idToInteract = textboxes[0].id;
+                    return actionJson;
+                } else {
+                    throw new Error(`Keine textbox gefunden`);
+                }
+            }
         }
-        const actionJson = JSON.parse(jsonMatch[0]);
+
+        if (actionJson.action === 'click') {
+            if (!elementToInteract || (elementToInteract.role !== 'link' && elementToInteract.role !== 'button')) {
+                console.error(`❌ Click on wrong element ID ${chosenId}`);
+
+                const clickables = interactableElements.filter(el => el.role === 'link' || el.role === 'button');
+
+                if (clickables.length > 0) {
+                    if (suggestedId !== null) {
+                        const suggestedElement = interactableElements.find(el => el.id === suggestedId);
+                        if (suggestedElement && (suggestedElement.role === 'link' || suggestedElement.role === 'button')) {
+                            actionJson.idToInteract = suggestedId;
+                            return actionJson;
+                        }
+                    }
+
+                    const closestClickable = clickables.reduce((closest, current) => {
+                        const currentDist = Math.abs(current.id - chosenId);
+                        const closestDist = Math.abs(closest.id - chosenId);
+                        return currentDist < closestDist ? current : closest;
+                    });
+
+                    actionJson.idToInteract = closestClickable.id;
+                    return actionJson;
+                } else {
+                    throw new Error(`Kein clickable Element gefunden`);
+                }
+            }
+        }
+
+        if ((actionJson.action === 'click' || actionJson.action === 'type')) {
+            if (!elementToInteract || isNaN(chosenId)) {
+                throw new Error(`ID ${chosenId} existiert nicht`);
+            }
+        }
+
         return actionJson;
+
     } catch (e: any) {
-        console.error("Fehler beim Aufruf von Ollama (Mistral):", e); throw e;
+        console.error("Mistral-Aufruf fehlgeschlagen:", e);
+        throw new Error(`Mistral nicht erreichbar: ${e.message}`);
     }
 }
-
 
 function stripAnsiCodes(str: string): string {
     return str.replace(/[\u001b\u009b][[()#;?]?[0-9]{1,4}(?:;[0-9]{0,4})?[0-9A-ORZcf-nqry=><]/g, '');
 }
 
-// (preFlightCookieClick bleibt unverändert)
-async function preFlightCookieClick(page: Page, logHistory: string[], structuredLog: LogStep[]) {
-    logHistory.push("Suche nach Cookie-Banner...");
+async function preFlightCookieClick(
+    page: Page,
+    logHistory: string[],
+    structuredLog: LogStep[],
+    controller?: ReadableStreamDefaultController
+) {
     const currentStepLogs: string[] = [];
     const cookieRegex = /^(OK|Alle akzeptieren|Einwilligung|Akzeptieren|Verstanden|Alle annehmen)$/i;
+
     try {
         const cookieButton = page.getByRole('button', { name: cookieRegex, exact: false }).first();
-        await cookieButton.waitFor({ state: 'visible', timeout: 5000 });
-        const buttonText = (await cookieButton.innerText()) || "OK-Button";
-        currentStepLogs.push(`Pre-Flight: Cookie-Banner-Button gefunden. Klicke auf: "${buttonText}"`);
-        await cookieButton.click({ force: true, timeout: 5000 });
-        logHistory.push(`Aktion: Cookie-Banner ("${buttonText}") geschlossen.`);
-        await page.waitForTimeout(1000);
-        structuredLog.push({
+        await cookieButton.waitFor({ state: 'visible', timeout: 3000 });
+
+        const buttonText = (await cookieButton.innerText()) || "OK";
+        currentStepLogs.push(`✓ Cookie-Banner: "${buttonText}"`);
+
+        await cookieButton.click({ force: true, timeout: 3000 });
+        logHistory.push(`Cookie akzeptiert`);
+        await page.waitForTimeout(500);
+
+        const cookieStep: LogStep = {
             step: "Schritt 1.5 (Cookie-Banner)",
             logs: currentStepLogs,
-            image: (await page.screenshot({ type: 'png' })).toString('base64')
-        });
+            image: (await page.screenshot({ type: 'png' })).toString('base64'),
+            timestamp: Date.now()
+        };
+
+        structuredLog.push(cookieStep);
+
+        if (controller) {
+            sendSSE(controller, { type: 'step', step: cookieStep, progress: 38 });
+        }
     } catch (error) {
-        currentStepLogs.push("Pre-Flight: Kein Cookie-Banner gefunden. Fahre fort.");
-        logHistory.push("Pre-Flight: Kein Cookie-Banner gefunden.");
+        currentStepLogs.push("ℹ️ Kein Cookie-Banner");
     }
 }
 
-// --- POST-Handler (Orchestrator) ---
 export async function POST(request: NextRequest) {
     const { url, task, browserType, clickDepth, domain, personaType } = await request.json() as {
-        url: string; task: string; browserType: 'chrome' | 'firefox' | 'safari';
-        clickDepth: number; domain: string; personaType: string;
+        url: string;
+        task: string;
+        browserType: 'chrome' | 'firefox' | 'safari';
+        clickDepth: number;
+        domain: string;
+        personaType: string;
     };
 
     if (!url || !task || !domain || !personaType) {
-        return NextResponse.json({ message: 'URL, Aufgabe, Domain und Persona-Typ sind erforderlich' }, { status: 400 });
+        return new Response(
+            JSON.stringify({ message: 'URL, Aufgabe, Domain und Persona erforderlich' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
     }
 
-    const structuredLog: LogStep[] = [];
-    const logHistory: string[] = [];
-    let browser = null;
-    const elementSelector = 'a[href], button, input[type="text"], input[type="search"], textarea, nav a, [role="navigation"] a, [role="link"], [role="button"], [role="listitem"], [role="option"]';
+    const stream = new ReadableStream({
+        async start(controller) {
+            const structuredLog: LogStep[] = [];
+            const logHistory: string[] = [];
+            let browser = null;
+            const elementSelector = 'a[href], button, input[type="text"], input[type="search"], textarea';
 
-    try {
-        logHistory.push("Generiere Persona...");
-        const personaPrompt = await generatePersonaPrompt(task, domain, personaType);
-
-        logHistory.push(`Starte ${browserType}-Browser...`);
-        switch (browserType) {
-            case 'firefox': browser = await firefox.launch({ headless: true }); break;
-            case 'safari': browser = await webkit.launch({ headless: true }); break;
-            default: browser = await chromium.launch({ headless: true });
-        }
-
-        const page = await browser.newPage({
-            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        });
-
-        await page.goto(url, { waitUntil: 'load' });
-
-        structuredLog.push({
-            step: "Schritt 1 (Start)",
-            logs: [`Gehe zu: ${url}`],
-            image: (await page.screenshot({ type: 'png' })).toString('base64')
-        });
-        logHistory.push(`1. Gehe zu: ${url}`);
-
-        structuredLog.push({
-            step: "Schritt 1.2 (Persona-Briefing)",
-            logs: [
-                "Der KI-Agent wird instruiert mit folgendem Prompt:",
-                `"${personaPrompt}"`
-            ]
-        });
-        logHistory.push(`Persona-Briefing: ${personaPrompt}`);
-
-        await preFlightCookieClick(page, logHistory, structuredLog);
-
-        for (let i = 0; i < clickDepth; i++) {
-            const currentStepName = `--- Schritt ${i + 2} / ${clickDepth + 2} ---`;
-            const currentStepLogs: string[] = [];
-
-            await page.waitForTimeout(500);
-            const screenshotBuffer = await page.screenshot({ type: 'png' });
-
-            const interactableElements = await getInteractableElements(page, elementSelector);
-
-            if (interactableElements.length === 0 && i > 0) {
-                currentStepLogs.push("Aktion: Keine (sichtbaren) Elemente im Viewport gefunden. Scrolle...");
-                await page.mouse.wheel(0, 500);
-                logHistory.push("Aktion: Scrolle nach unten.");
-                structuredLog.push({ step: currentStepName, logs: currentStepLogs, image: screenshotBuffer.toString('base64') });
-                continue;
-            }
-
-            currentStepLogs.push(`Denke nach (annotiere ${interactableElements.length} Elemente)...`);
-            const annotatedScreenshotBase64 = await annotateImage(screenshotBuffer, interactableElements);
-
-
-            // --- NEUER 2-SCHRITT-DENKPROZESS ---
-            // 1. "Augen" (Llava): Was will ich tun?
-            currentStepLogs.push(`Denke nach (Schritt 1/2: Visuelle Absicht mit Llava)...`);
-            const visualIntention = await getVisualIntention(task, logHistory, annotatedScreenshotBase64, personaPrompt);
-            currentStepLogs.push(`KI-Absicht (Llava): ${visualIntention}`);
-
-            // 2. "Logiker" (Mistral): Welches JSON-Objekt passt zu dieser Absicht?
-            currentStepLogs.push(`Denke nach (Schritt 2/2: Logische Aktion mit Mistral)...`);
-            const aiAction = await getLogicalAction(visualIntention, interactableElements, task);
-            // --- ENDE 2-SCHRITT-DENKPROZESS ---
-
-            const currentStep: LogStep = { step: currentStepName, logs: currentStepLogs, image: annotatedScreenshotBase64 };
-
-            const chosenIdRaw = aiAction.idToInteract;
-            const chosenId = parseInt(String(chosenIdRaw), 10);
-            const elementToInteract = interactableElements.find(el => el.id === chosenId);
-
-            if ((aiAction.action === 'click' || aiAction.action === 'type' || aiAction.action === 'hover') && (!elementToInteract || isNaN(chosenId))) {
-                currentStepLogs.push(`Aktion: KI (Mistral) wollte ID ${chosenIdRaw} wählen, aber die existiert nicht in der Liste. Stoppe.`);
-                structuredLog.push(currentStep); break;
-            }
+            const sessionState: SessionState = {
+                searchText: null,
+                searchSubmitted: false,
+                onSearchResults: false,
+                onProductPage: false,
+                currentUrl: '',
+                lastAction: '',
+                actionHistory: []
+            };
 
             try {
-                const { role, text, realIndex } = elementToInteract || {};
-                const locator = elementToInteract ? page.locator(elementSelector).nth(realIndex!) : null;
+                console.log(`[START] Simulation gestartet für ${url}`);
 
-                // ** ERWEITERTES DEBUGGING **
-                currentStepLogs.push(`KI-JSON (Mistral): ${JSON.stringify(aiAction)}`);
-                currentStepLogs.push(`Gefundenes Element: ${JSON.stringify(elementToInteract || 'null')}`);
+                sendSSE(controller, { type: 'progress', value: 10, status: 'Generiere Persona...' });
 
-                if (aiAction.action === 'click' && locator && (role === 'link' || role === 'button')) {
-                    currentStepLogs.push(`KI-Entscheidung: Klicke (Rolle: ${role}) mit Text: "${text}" [ID: ${chosenId}]`);
+                const personaPrompt = await generatePersonaPrompt(task, domain, personaType);
+                console.log(`[PERSONA] Generated`);
 
-                    const [newPage] = await Promise.all([
-                        page.waitForEvent('load', { timeout: 10000 }).catch(() => null),
-                        locator.click({ timeout: 10000 })
-                    ]);
+                sendSSE(controller, { type: 'progress', value: 20, status: 'Starte Browser...' });
 
-                    if (newPage) {
-                        const newUrl = page.url();
-                        currentStepLogs.push(`Aktion: Erfolgreich geklickt. Neue URL: ${newUrl}`);
-                        logHistory.push(`Aktion: Klick (ID ${chosenId}), neue URL: ${newUrl}`);
-                    } else {
-                        currentStepLogs.push(`Aktion: Erfolgreich geklickt (keine Navigation).`);
-                        logHistory.push(`Aktion: Klick (ID ${chosenId}) (keine Navigation).`);
+                switch (browserType) {
+                    case 'firefox': browser = await firefox.launch({ headless: true }); break;
+                    case 'safari': browser = await webkit.launch({ headless: true }); break;
+                    default: browser = await chromium.launch({ headless: true });
+                }
+
+                const page = await browser.newPage({
+                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                });
+
+                sendSSE(controller, { type: 'progress', value: 30, status: 'Lade Website...' });
+
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+
+                sessionState.currentUrl = page.url();
+                console.log(`[LOADED] ${sessionState.currentUrl}`);
+
+                const startStep: LogStep = {
+                    step: "Schritt 1 (Start)",
+                    logs: [`✓ Navigiere zu: ${url}`],
+                    image: (await page.screenshot({ type: 'png' })).toString('base64'),
+                    timestamp: Date.now()
+                };
+                structuredLog.push(startStep);
+                sendSSE(controller, { type: 'step', step: startStep, progress: 35 });
+
+                const personaLines = personaPrompt.split('\n').filter(l => l.trim());
+                const personaStep: LogStep = {
+                    step: "Schritt 1.2 (Persona-Briefing)",
+                    logs: [
+                        "✓ KI-Agent instruiert:",
+                        "─".repeat(50),
+                        ...personaLines,
+                        "─".repeat(50)
+                    ],
+                    timestamp: Date.now()
+                };
+                structuredLog.push(personaStep);
+                sendSSE(controller, { type: 'step', step: personaStep, progress: 40 });
+
+                await preFlightCookieClick(page, logHistory, structuredLog, controller);
+
+                const totalSteps = clickDepth;
+                for (let i = 0; i < totalSteps; i++) {
+                    const progressPercent = 40 + Math.round((i / totalSteps) * 50);
+                    const currentStepName = `Schritt ${i + 2}/${totalSteps + 2}`;
+                    const currentStepLogs: string[] = [];
+
+                    console.log(`\n[STEP ${i + 1}/${totalSteps}] Starting...`);
+
+                    sendSSE(controller, { type: 'progress', value: progressPercent, status: currentStepName });
+
+                    await page.waitForTimeout(200);
+
+                    const screenshotBuffer = await page.screenshot({ type: 'png' });
+                    const interactableElements = await getInteractableElements(page, elementSelector);
+
+                    currentStepLogs.push(`📊 Gefunden: ${interactableElements.length} Elemente`);
+                    console.log(`[STEP ${i + 1}] Found ${interactableElements.length} elements`);
+
+                    if (interactableElements.length === 0) {
+                        currentStepLogs.push("⚠️ Keine Elemente. Scrolle...");
+                        console.log(`[STEP ${i + 1}] No elements, scrolling...`);
+
+                        await page.mouse.wheel(0, 500);
+                        sessionState.lastAction = 'scroll';
+                        sessionState.actionHistory.push('scroll');
+
+                        const scrollStep: LogStep = {
+                            step: currentStepName,
+                            logs: currentStepLogs,
+                            image: screenshotBuffer.toString('base64'),
+                            timestamp: Date.now()
+                        };
+                        structuredLog.push(scrollStep);
+                        sendSSE(controller, { type: 'step', step: scrollStep });
+
+                        await page.waitForTimeout(500);
+                        const elementsAfterScroll = await getInteractableElements(page, elementSelector);
+                        console.log(`[STEP ${i + 1}] After scroll: ${elementsAfterScroll.length} elements`);
+
+                        if (elementsAfterScroll.length === 0) {
+                            currentStepLogs.push("❌ Immer noch keine Elemente. Abbruch.");
+                            console.error(`[STEP ${i + 1}] Still no elements. Breaking.`);
+
+                            const errorStep: LogStep = {
+                                step: currentStepName + " (Fehler)",
+                                logs: [...currentStepLogs, "Keine interaktiven Elemente gefunden."],
+                                image: screenshotBuffer.toString('base64'),
+                                timestamp: Date.now()
+                            };
+                            structuredLog.push(errorStep);
+                            sendSSE(controller, { type: 'step', step: errorStep });
+                            break;
+                        }
+
+                        continue;
                     }
 
-                } else if (aiAction.action === 'type' && locator && role === 'textbox' && aiAction.textToType) {
-                    currentStepLogs.push(`KI-Entscheidung: Tippe '${aiAction.textToType}' in (Rolle: ${role}) mit Text/Placeholder: "${text}" [ID: ${chosenId}]`);
+                    console.log(`[STEP ${i + 1}] Processing ${interactableElements.length} elements...`);
 
-                    await locator.fill(aiAction.textToType, { timeout: 10000 });
-                    currentStepLogs.push(`Aktion: Erfolgreich getippt.`);
-                    logHistory.push(`Aktion: Tippe "${aiAction.textToType}" in ID ${chosenId}`);
+                    currentStepLogs.push(`📊 Annotiere ${interactableElements.length} Elemente`);
+                    const annotatedScreenshotBase64 = await annotateImage(screenshotBuffer, interactableElements);
 
-                } else if (aiAction.action === 'hover' && locator && (role === 'link' || role === 'button')) {
-                    currentStepLogs.push(`KI-Entscheidung: Hover über (Rolle: ${role}) mit Text: "${text}" [ID: ${chosenId}]`);
+                    currentStepLogs.push(`👁️ Llava analysiert...`);
+                    console.log(`[STEP ${i + 1}] Calling Llava...`);
 
-                    await locator.hover({ timeout: 10000 });
-                    currentStepLogs.push(`Aktion: Erfolgreich gehovert. Warte auf Flyout...`);
-                    logHistory.push(`Aktion: Hover über ID ${chosenId}`);
-                    await page.waitForTimeout(1000);
+                    let visualIntention;
+                    try {
+                        visualIntention = await getVisualIntention(task, annotatedScreenshotBase64, personaPrompt, sessionState);
+                        console.log(`[STEP ${i + 1}] Llava: "${visualIntention}"`);
+                    } catch (error) {
+                        currentStepLogs.push(`❌ Llava Fehler: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        console.error(`[STEP ${i + 1}] Llava error:`, error);
 
-                } else if (aiAction.action === 'scroll') {
-                    const pixels = aiAction.pixels || 500;
-                    currentStepLogs.push(`KI-Entscheidung: Scrolle nach unten (${pixels}px).`);
-                    await page.mouse.wheel(0, pixels);
-                    currentStepLogs.push(`Aktion: Erfolgreich gescrollt.`);
-                    logHistory.push(`Aktion: Scrolle nach unten.`);
+                        const errorStep: LogStep = {
+                            step: currentStepName + " (Llava Fehler)",
+                            logs: currentStepLogs,
+                            image: annotatedScreenshotBase64,
+                            timestamp: Date.now()
+                        };
+                        structuredLog.push(errorStep);
+                        sendSSE(controller, { type: 'step', step: errorStep });
+                        break;
+                    }
 
-                } else if (aiAction.action === 'finish') {
-                    currentStepLogs.push(`KI-Entscheidung: Aufgabe beendet.`);
-                    logHistory.push("Aktion: Aufgabe beendet.");
-                    structuredLog.push(currentStep); break;
-                } else {
-                    currentStepLogs.push(`Aktion: KI wollte ungültige Aktion (${aiAction.action} auf ${role || 'unbekannt'}) ausführen. Stoppe.`);
-                    logHistory.push("Aktion: Ungültige Aktion.");
-                    structuredLog.push(currentStep); break;
+                    currentStepLogs.push(`💭 "${visualIntention}"`);
+                    currentStepLogs.push(``);
+
+                    currentStepLogs.push(`🧠 Mistral entscheidet...`);
+                    console.log(`[STEP ${i + 1}] Calling Mistral...`);
+
+                    let aiAction;
+                    try {
+                        aiAction = await getLogicalAction(visualIntention, interactableElements, task, sessionState);
+                        console.log(`[STEP ${i + 1}] Mistral action:`, aiAction);
+                    } catch (error) {
+                        currentStepLogs.push(`❌ Mistral Fehler: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        console.error(`[STEP ${i + 1}] Mistral error:`, error);
+
+                        const errorStep: LogStep = {
+                            step: currentStepName + " (Mistral Fehler)",
+                            logs: currentStepLogs,
+                            image: annotatedScreenshotBase64,
+                            timestamp: Date.now()
+                        };
+                        structuredLog.push(errorStep);
+                        sendSSE(controller, { type: 'step', step: errorStep });
+                        break;
+                    }
+
+                    const currentStep: LogStep = {
+                        step: currentStepName,
+                        logs: currentStepLogs,
+                        image: annotatedScreenshotBase64,
+                        timestamp: Date.now()
+                    };
+
+                    const chosenId = parseInt(String(aiAction.idToInteract), 10);
+                    const elementToInteract = interactableElements.find(el => el.id === chosenId);
+
+                    if ((aiAction.action === 'click' || aiAction.action === 'type') &&
+                        (!elementToInteract || isNaN(chosenId))) {
+                        currentStepLogs.push(``);
+                        currentStepLogs.push(`❌ FEHLER: ID ${chosenId} existiert nicht`);
+                        console.error(`[STEP ${i + 1}] Invalid ID ${chosenId}`);
+                        structuredLog.push(currentStep);
+                        sendSSE(controller, { type: 'step', step: currentStep });
+                        break;
+                    }
+
+                    try {
+                        const { role, text, realIndex } = elementToInteract || {};
+                        const locator = elementToInteract ? page.locator(elementSelector).nth(realIndex!) : null;
+
+                        currentStepLogs.push(`📋 Action: ${aiAction.action}`);
+                        if (aiAction.idToInteract !== undefined) {
+                            currentStepLogs.push(`   Target: ID ${chosenId} (${role}: "${text}")`);
+                        }
+                        if (aiAction.textToType) {
+                            currentStepLogs.push(`   Text: "${aiAction.textToType}"`);
+                        }
+                        currentStepLogs.push(`   Rationale: "${aiAction.rationale || ''}"`);
+                        currentStepLogs.push(``);
+
+                        if (aiAction.action === 'click' && locator && (role === 'link' || role === 'button')) {
+                            currentStepLogs.push(`🖱️ Klicke auf "${text}" [ID ${chosenId}]`);
+                            console.log(`[STEP ${i + 1}] Clicking ID ${chosenId}`);
+
+                            const startUrl = page.url();
+                            await locator.click({ timeout: 8000 });
+                            await page.waitForLoadState('domcontentloaded', { timeout: 8000 });
+                            const endUrl = page.url();
+
+                            sessionState.currentUrl = endUrl;
+                            sessionState.lastAction = 'click';
+                            sessionState.actionHistory.push(`click:${text}`);
+
+                            if (endUrl.includes('/suche/') || endUrl.includes('/search/') || endUrl.includes('?q=')) {
+                                sessionState.onSearchResults = true;
+                                sessionState.searchSubmitted = true;
+                                currentStepLogs.push(`   ✅ Auf Suchergebnissen!`);
+                            }
+
+                            if (startUrl !== endUrl) {
+                                currentStepLogs.push(`   ✓ Navigation: ${endUrl}`);
+                            } else {
+                                currentStepLogs.push(`   ✓ Geklickt`);
+                            }
+
+                            logHistory.push(`Klick: ${text}`);
+
+                        } else if (aiAction.action === 'type' && locator && role === 'textbox' && aiAction.textToType) {
+                            currentStepLogs.push(`⌨️ Tippe "${aiAction.textToType}" [ID ${chosenId}]`);
+                            console.log(`[STEP ${i + 1}] Typing "${aiAction.textToType}"`);
+
+                            await locator.fill(aiAction.textToType, { timeout: 8000 });
+
+                            try {
+                                await locator.press('Enter', { timeout: 2000 });
+                                await page.waitForLoadState('domcontentloaded', { timeout: 8000 });
+
+                                sessionState.searchText = aiAction.textToType;
+                                sessionState.searchSubmitted = true;
+                                sessionState.currentUrl = page.url();
+
+                                if (page.url().includes('/suche/') || page.url().includes('/search/')) {
+                                    sessionState.onSearchResults = true;
+                                }
+
+                                currentStepLogs.push(`   ✓ Getippt + Enter`);
+                                logHistory.push(`Tippe: ${aiAction.textToType} + Enter`);
+                            } catch {
+                                sessionState.searchText = aiAction.textToType;
+                                sessionState.searchSubmitted = false;
+                                currentStepLogs.push(`   ✓ Getippt (Enter fehlgeschlagen)`);
+                                logHistory.push(`Tippe: ${aiAction.textToType}`);
+                            }
+
+                            sessionState.lastAction = 'type';
+                            sessionState.actionHistory.push(`type:${aiAction.textToType}`);
+
+                        } else if (aiAction.action === 'scroll') {
+                            const pixels = aiAction.pixels || 500;
+                            currentStepLogs.push(`📜 Scrolle ${pixels}px`);
+                            console.log(`[STEP ${i + 1}] Scrolling ${pixels}px`);
+                            await page.mouse.wheel(0, pixels);
+                            currentStepLogs.push(`   ✓ Gescrollt`);
+                            sessionState.lastAction = 'scroll';
+                            sessionState.actionHistory.push('scroll');
+
+                        } else if (aiAction.action === 'finish') {
+                            currentStepLogs.push(`✅ Aufgabe abgeschlossen!`);
+                            currentStepLogs.push(`   ${aiAction.rationale}`);
+                            console.log(`[STEP ${i + 1}] Finished!`);
+                            structuredLog.push(currentStep);
+                            sendSSE(controller, { type: 'step', step: currentStep });
+                            break;
+
+                        } else {
+                            currentStepLogs.push(`❌ Ungültige Aktion: ${aiAction.action} auf ${role}`);
+                            console.error(`[STEP ${i + 1}] Invalid action ${aiAction.action} on ${role}`);
+                            structuredLog.push(currentStep);
+                            sendSSE(controller, { type: 'step', step: currentStep });
+                            break;
+                        }
+
+                        structuredLog.push(currentStep);
+                        sendSSE(controller, { type: 'step', step: currentStep });
+
+                    } catch (interactionError: any) {
+                        const errorMsg = stripAnsiCodes(interactionError.message);
+                        currentStepLogs.push(``);
+                        currentStepLogs.push(`❌ Fehler: ${errorMsg}`);
+                        console.error(`[STEP ${i + 1}] Interaction error:`, interactionError);
+                        structuredLog.push(currentStep);
+                        sendSSE(controller, { type: 'step', step: currentStep });
+                        throw interactionError;
+                    }
                 }
-                structuredLog.push(currentStep);
 
-            } catch (interactionError: any) {
-                const errorMsg = stripAnsiCodes(interactionError.message);
-                currentStepLogs.push(`Aktion: Interaktion fehlgeschlagen. Stoppe.`);
-                currentStepLogs.push(`FEHLER: ${errorMsg}`);
-                logHistory.push(`Aktion: Interaktion fehlgeschlagen.`);
-                structuredLog.push(currentStep);
-                throw interactionError;
+                console.log(`[COMPLETE] Simulation finished with ${structuredLog.length} steps`);
+                sendSSE(controller, { type: 'progress', value: 100, status: 'Abgeschlossen!' });
+                sendSSE(controller, { type: 'complete', log: structuredLog });
+
+            } catch (error: any) {
+                const errorMessage = stripAnsiCodes((error instanceof Error) ? error.message : "Unbekannter Fehler");
+                console.error("[ERROR] Simulation Error:", errorMessage);
+                sendSSE(controller, {
+                    type: 'error',
+                    message: errorMessage,
+                    log: structuredLog
+                });
+            } finally {
+                if (browser) await browser.close();
+                controller.close();
             }
         }
+    });
 
-        if (structuredLog.length > 0 && !structuredLog.at(-1)?.logs.some(l => l.includes("beendet"))) {
-            structuredLog.push({ step: "Simulation gestoppt", logs: ["Limit der Aktionen erreicht."] });
-        }
-        return NextResponse.json({ log: structuredLog });
-
-    } catch (error: any) {
-        const rawErrorMessage = (error instanceof Error) ? error.message : "Unbekannter Fehler";
-        const errorMessage = stripAnsiCodes(rawErrorMessage);
-        structuredLog.push({ step: "FATALER FEHLER", logs: [errorMessage] });
-        console.error(errorMessage);
-        return NextResponse.json({ message: errorMessage, log: structuredLog }, { status: 500 });
-    } finally {
-        if (browser) { await browser.close(); }
-    }
+    return new Response(stream, {
+        headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        },
+    });
 }
