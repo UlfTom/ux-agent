@@ -50,12 +50,12 @@ export function Header() {
                     <Link href="/" className="flex items-center gap-3 group">
                         <motion.div
                             className={`flex items-center gap-2`}
-                            whileHover={{ scale: 1.1 }}
+                            whileHover={{ scale: 1.01 }}
                             whileTap={{ scale: 0.95 }}
                             transition={{ type: "spring", stiffness: 400, damping: 17 }}
                         >
                             <Birdhouse className="h-8 w-8 text-black" />
-                            <span className="text-xxl md:text-xl text-black font-headline tracking-tighter-custom">bird<span className="font-accent">house</span></span>
+                            <span className="text-xxl md:text-xl text-black font-headline tracking-tighter-custom uppercase">bird<span className="font-accent normal-case">house</span></span>
 
                         </motion.div>
                         <span className={`text-xl font-bold group-hover:${gradients.brandText} transition-all duration-300`}>

@@ -1,62 +1,218 @@
-# Pitch: KI UX-Agent
+# Pitch Deck - UX Simulation Plattform
 
-Dieses Dokument fasst das Kern-Wertversprechen unseres KI UX-Agenten zusammen.
+---
 
-## Die Kurze Version (Der Elevator Pitch)
+## Folie 1: Das Problem
 
-Analytics-Tools (wie Adobe) zeigen uns, *was* Nutzer tun. Qualitative UX-Tests (n=5) zeigen uns, *warum* sie es tun. Beide sind voneinander getrennt, langsam und teuer.
+**UX-Testing ist teuer, langsam und unvollständig**
 
-Unser KI UX-Agent verbindet beides: Er liefert **qualitative Einblicke (das "Warum") in quantitativer Skalierung (n=100)**.
+- Traditionelle Usability-Studien: 5k-15k €, 2-3 Wochen
+- Automatisiertes Testing: Findet Bugs, keine UX-Issues
+- Oft zu spät im Entwicklungsprozess
 
-Wir setzen autonome KI-Agenten auf eine Live-Website, geben ihnen eine Persona (z.B. "pragmatischer Sucher") und eine Aufgabe (z.B. "Finde Jeans"). Statt blind im Code zu agieren, *sehen* unsere Agenten die Seite: Wir annotieren Screenshots in Echtzeit, sodass die KI visuelle Entscheidungen trifft (z.B. "Ich sehe das Such-Icon [Box 3] und klicke es"). Das Ergebnis ist ein detailliertes, visuelles Logbuch, das jeden Klick, jeden Screenshot und jede "Gedanke" der KI zeigt.
+**Resultat:** Firmen shippen Produkte mit UX-Problemen, die Conversion kosten.
 
-Wir finden Usability-Probleme nicht mehr zufällig, sondern systematisch.
+---
 
-## Die Lange Version (Die Produkt-Story)
+## Folie 2: Die Lösung
 
-### 1. Das Problem: Die Lücke zwischen "Was" und "Warum"
+**KI-Agents die echte Nutzer simulieren**
 
-Jedes E-Commerce-Unternehmen (wie OTTO) steht vor derselben Herausforderung:
-* **Das "Was" (Quantitativ):** Wir haben Unmengen an Analytics-Daten. Wir *wissen*, dass 70% der Nutzer auf der Kategorieseite abspringen.
-* **Das "Warum" (Qualitativ):** Wir *wissen nicht*, *warum* sie abspringen. Ist der Filter verwirrend? Ist der "Sale"-Banner zu aggressiv? Ist der "Weiter"-Button nicht sichtbar?
+Denk: "Selenium + ChatGPT + Menschliches Verhalten"
 
-Um das "Warum" zu finden, führen wir manuelle, moderierte Usability-Tests durch. Diese sind extrem teuer, langsam (Wochen für die Rekrutierung und Auswertung) und die Stichprobengröße (n=5) ist winzig und oft nicht repräsentativ.
+- ✅ KI-Agents navigieren deine Site wie echte Nutzer
+- ✅ Verschiedene Personas (pragmatisch, explorativ, vorsichtig)
+- ✅ Findet UX-Issues mit Screenshots
+- ✅ Detaillierte Reports mit Reproduktions-Schritten
+- ✅ 100x schneller, 50x günstiger als traditionelles Testing
 
-Wir stecken fest zwischen Daten ohne Einblicke und Einblicken ohne Daten.
+---
 
-### 2. Die Lösung: Der Autonome "Pilot" (Das Herzstück)
+## Folie 3: Wie es funktioniert
 
-Unsere Plattform schließt diese Lücke. Wir schicken einen "KI-Piloten" (einen autonomen Agenten), der die Rolle eines echten Nutzers einnimmt.
+**3-Schritte Prozess:**
 
-Im Gegensatz zu anderen Test-Tools, die an "dummen" Skripten oder fehlerhafter Texterkennung (OCR) scheitern, nutzt unser Pilot einen robusten **"Bounding Box"-Ansatz**:
+1. **Szenario definieren**
+   - "Finde Winter-Jeans" + Nutzer-Persona
+   - Optional: Accessibility-Constraints (Tastatur-Only, Sehschwäche)
 
-1.  **Wir sehen:** Wir scannen die Seite und identifizieren *nur* die sichtbaren, interaktiven Elemente (Buttons, Links, Inputs).
-2.  **Wir annotieren:** Wir zeichnen rote Boxen und IDs (z.B. `[1]`, `[2]`, `[3]`) in Echtzeit auf den Screenshot.
-3.  **Die KI entscheidet (Visuell):** Das KI-Gehirn (`llava`) erhält dieses annotierte Bild. Es muss kein JSON mit 300 Elementen parsen (was zu `Index 1026`-Fehlern führt). Es muss keinen Text lesen (was zu `"Einverständnis gibt"`-Fehlern führt). Es muss nur *sehen*:
-    > "Meine Persona ist pragmatisch. Ich will suchen. Die Suchleiste ist in Box `[1]` und das Lupen-Icon in Box `[2]`. Ich wähle `ID: 1`."
-4.  **Wir handeln (Robust):** Unser System übersetzt `ID: 1` zurück in den 100% zuverlässigen Playwright-Selektor und führt die Aktion (z.B. "Tippe...") aus.
+2. **KI-Simulation**
+   - Vision AI (Llava) sieht die Oberfläche
+   - LLM (Mistral) trifft menschenähnliche Entscheidungen
+   - Browser-Automatisierung führt Aktionen aus
+   - Optional: Simuliert Einschränkungen
 
-Dieser Ansatz ist schnell, visuell und löst die Kernprobleme (Halluzinationen und OCR-Fehler), an denen andere Agenten scheitern.
+3. **Sofortiger Report**
+   - UX-Reibungspunkte identifiziert
+   - Reproduzierbare Schritte mit Screenshots
+   - Priorisierte Empfehlungen
 
-### 3. Die Wertpakete (Das Geschäftsmodell)
+**Zeit:** 3-5 Minuten  
+**Kosten:** €0,10 pro Simulation
 
-Basierend auf dieser stabilen "Pilot"-Technologie bieten wir drei klare Wertstufen an:
+---
 
-**Paket 1: Basic (Unmoderierte Tests)**
-* **Was es ist:** Der zuverlässige "Pilot" (Modul 3) + der "Live-Gott" (Modul 1).
-* **Angebot:** Skalierbares Smoke-Testing. Führe `n=10` Agenten mit einer "live" generierten Persona aus.
-* **Ergebnis:** 10 visuelle Logbücher. *Antwortet auf: "Ist der Checkout-Flow technisch kaputt?"*
+## Folie 4: Unique Value
 
-**Paket 2: Plus (Moderierte Tests + RAG)**
-* **Was es ist:** Wir schalten den "KI Researcher" (Modul 2) hinzu.
-* **Angebot:** Der Researcher greift ein, wenn der Pilot feststeckt (Schleifen-Erkennung). Wichtiger noch: Er füttert den Piloten mit externem Wissen (RAG) (z.B. "Hinweis: Laut Baymard-Institut nutzen 90% der pragmatischen Nutzer die Suche").
-* **Ergebnis:** Ein qualitativer Bericht mit KI-Zusammenfassung. *Antwortet auf: "Warum ist dieser Flow verwirrend und verstößt er gegen UX-Best-Practices?"*
+### Core: Intelligente UX-Simulation
+- ReAct-Pattern (Plan → Observe → Verify → Act → Reflect)
+- Verschiedene Persona-Typen mit eigenem Verhalten
+- Vision-basierte Analyse statt nur DOM-Parsing
 
-**Paket 3: Premium (Data-Driven "Gott-Modus")**
-* **Was es ist:** Das "Gott-Modul" (Modul 1) wird an *deine* Daten angeschlossen.
-* **Angebot:** Wir erstellen "digitale Zwillinge" deiner echten Kundensegmente (basierend auf Adobe Analytics-Daten, echten Befragungen). Teste Hypothesen an "Nicht-Kunden" oder "Warenkorb-Abbrechern".
-* **Ergebnis:** Predictive UX Analytics. *Antwortet auf: "Wie werden unsere 35% 'Mobile-Search'-Nutzer auf das neue Feature reagieren?"*
+### Advanced: Domain-Insights
+- E-Commerce: Checkout-Flow Optimierung
+- SaaS: Onboarding-Analyse
+- Media: Content-Discoverability
 
-### 4. Nächste Schritte (MVP-Fokus)
+### Optional: Accessibility Testing
+- Tastatur-Navigation Tests
+- Visuelle Einschränkungen (Blur, Farbenblindheit)
+- Screen Reader Simulation
+- WCAG Compliance Checks
 
-Um diese Vision zu erreichen, fokussieren wir uns auf **100% Zuverlässigkeit im Basic-Paket**. Unser nächster Meilenstein ist es, den "Bounding Box"-Agenten (Plan G) so stabil zu machen, dass er einen 5-Schritte-Test auf `otto.de` 10 von 10 Malen erfolgreich abschließt.
+**Für wen wichtig:**
+- E-Commerce: Conversion-Optimierung
+- Große Marken: Compliance-Anforderungen (EU Act 2025)
+- Agenturen: Zusätzlicher Service für Kunden
+
+---
+
+## Folie 5: Markt-Opportunität
+
+**8 Mrd. € UX/Accessibility Testing Markt**
+
+### Ziel-Segmente
+1. **E-Commerce** (2 Mrd. € TAM)
+   - Conversion-Optimierung
+   - Checkout-Flow Testing
+   - Optional: Accessibility Compliance
+
+2. **SaaS-Produkte** (3 Mrd. € TAM)
+   - Onboarding-Flows
+   - Feature-Adoption
+   - Optional: Barrierefreies Design
+
+3. **Agenturen** (1,5 Mrd. € TAM)
+   - Kunden-Deliverables
+   - Pre-Launch Validierung
+   - Optional: Accessibility-Audits
+
+### Wachstums-Treiber
+- Remote Work → schwerer traditionelles Testing
+- KI-Adoption in Dev-Tools
+- Accessibility-Vorschriften nehmen zu
+- EU Accessibility Act (2025)
+
+---
+
+## Folie 6: Traktion & Roadmap
+
+### Aktueller Status (v0.2)
+- ✅ ReAct KI-Architektur funktioniert
+- ✅ Multi-Persona Simulation
+- ✅ Screenshot-basiertes Reporting
+- 🎯 Beta mit 5 Design-Agenturen
+
+### 6-Monats Plan (v0.4)
+- 🚀 Domain-spezifische Insights
+  - E-Commerce, SaaS, Media
+- 🚀 A/B Testing Modus
+- 🚀 50 zahlende Kunden
+- 🚀 Integration mit Figma, Slack
+
+### 12-Monats Vision (v0.6)
+- 🌟 Accessibility Testing Suite (optional)
+- 🌟 CI/CD Pipeline Integration
+- 🌟 Team-Kollaborations-Features
+- 🌟 200 Kunden, 25k € MRR
+
+---
+
+## Folie 7: Business Model
+
+**Usage-basiertes SaaS**
+
+### Pricing Tiers
+- **Starter** (49 €/Mo): 50 Simulationen/Monat
+- **Professional** (199 €/Mo): 250 Simulationen + Domain-Insights
+- **Team** (499 €/Mo): 1.000 Simulationen + Kollaboration
+- **Enterprise** (Custom): Unlimited + Accessibility + On-Premise
+
+### Unit Economics
+- **Kosten pro Simulation:** €0,08 (KI + Infra)
+- **Revenue pro Simulation:** €0,50-2,00
+- **Bruttomarge:** 75-96%
+
+### Revenue-Projektionen
+- **Jahr 1:** 120k € ARR (100 Kunden)
+- **Jahr 2:** 600k € ARR (500 Kunden)
+- **Jahr 3:** 2,4M € ARR (2.000 Kunden)
+
+---
+
+## Folie 8: Wettbewerb
+
+| Wettbewerber | Typ | Limitation |
+|------------|------|------------|
+| **UserTesting** | Manuell | Teuer (5k €+), langsam (Wochen) |
+| **Selenium** | Automatisiert | Kein UX-Verständnis, nur geskriptet |
+| **axe, Wave** | A11y Checker | Statische Analyse, kein Verhaltens-Test |
+| **Hotjar** | Analytics | Reaktiv (nach Issues) |
+| **Wir** | **KI UX** | **Proaktiv, verhaltensbasiert, skalierbar** |
+
+**Unser Burggraben:**
+- ✅ Erste mit KI-Agents + Vision-basierter Analyse
+- ✅ Vision + Reasoning (nicht nur DOM-Parsing)
+- ✅ Verhaltens-Patterns, nicht geskriptet
+- ✅ Optionale Accessibility-Tests
+
+---
+
+## Folie 9: Team
+
+**[Dein Team hier]**
+
+**Warum wir gewinnen:**
+- Deep Expertise in UX, KI, Accessibility
+- Leidenschaft für besseres Web
+- Schnelles Shipping (v0.2 in 3 Monaten)
+- Domain-Wissen aus [dein Hintergrund]
+
+**Advisors:**
+- [UX Research Expert]
+- [Accessibility Advocate]
+- [SaaS Go-to-Market]
+
+---
+
+## Folie 10: The Ask
+
+**Seed-Runde: 500k €**
+
+### Verwendung
+- **40% Produkt** (Domain-Insights, Accessibility, Integrationen)
+- **30% GTM** (Content, Partnerschaften, Sales)
+- **20% Ops** (Infra, Legal, Compliance)
+- **10% Team** (2 Engineers, 1 Designer)
+
+### Meilensteine
+- 6 Monate: 50 Kunden, 5k € MRR
+- 12 Monate: 200 Kunden, 25k € MRR
+- 18 Monate: Series A ready (100k+ € MRR)
+
+---
+
+## Folie 11: Vision
+
+> **"Jede Website sollte schnell und günstig testbar sein—für jeden."**
+
+**Wir bauen nicht nur ein Testing-Tool.**
+
+Wir ermöglichen die nächste Generation von **proaktiver UX-Optimierung**.
+
+- Schnellere UX-Iteration
+- Bessere Conversion-Raten
+- Optional: Accessibility-Compliance
+- **Besseres Web für alle**
+
+**Sei Teil der UX-Revolution.** 🚀

@@ -1,83 +1,143 @@
-# Projekt-Vision: KI UX-Agent
+# Vision - UX Simulation Plattform
 
-## 1. Das Leitbild (The "Why")
+## Mission Statement
+UX-Research demokratisieren durch KI-gesteuerte Agents, die **reales menschliches Verhalten** simulieren und Usability-Probleme finden, bevor echte Nutzer sie erleben.
 
-Unser Ziel ist es, von statischen, manuellen UX-Tests (z.B. mit PDFs oder moderierten Sessions) zu **dynamischen, skalierten und autonomen Usability-Simulationen** überzugehen.
+---
 
-Wir bauen ein System, das nicht nur prüft, *ob* eine Aufgabe lösbar ist, sondern *wie* und *warum* eine Persona eine bestimmte Entscheidung trifft. Wir kombinieren **qualitative Tiefe (n=1)** mit **quantitativer Skalierung (n=100)**, indem wir realistische, datengetriebene Personas "live" auf unserer echten Web-Anwendung testen.
+## Woran wir glauben
 
-Das Endziel ist ein "digitaler Zwilling" unseres Kundenstamms, der es uns ermöglicht, Design-Entscheidungen, A/B-Tests und Neukunden-Strategien zu validieren, bevor sie live gehen.
+**Traditionelles UX-Testing ist kaputt:**
+- Teuer (5k-15k € pro Studie)
+- Langsam (2-3 Wochen Minimum)
+- Voreingenommen (limitierte Demographien)
+- Reaktiv (findet Issues nach Launch)
 
-## 2. Die Produkt-Pakete (Das Geschäftsmodell)
+**Unser Ansatz:**
+- Sofortige Simulation (< 5 Minuten)
+- Kosteneffektiv (€0,10 pro Test)
+- Diverse Personas automatisch
+- Proaktiv (Test vor Deployment)
 
-Unser System wird in drei Stufen entwickelt und angeboten, die aufeinander aufbauen. Die Abrechnung erfolgt über ein flexibles **Token-Modell (Pay-as-you-go)**, das durch **monatliche Abos** (die rabattierte Token-Pakete enthalten) ergänzt werden kann.
+---
 
-### Paket 1: "Basic" (Unmoderierte Simulation)
-* **Kosten:** 1 Token / Persona
-* **Das Produkt:** Ein schneller, "unmoderierter" Agent, der eine Aufgabe ausführt.
-* **Module:** `Pilot` (Modul 3) + `Gott (Lite)` (Modul 1)
-* **Funktion:**
-    1.  **"Gott (Lite)":** Generiert "live" eine Persona basierend auf der Aufgabe (z.B. "pragmatisch" für eine Such-Aufgabe).
-    2.  **"Pilot":** Führt den Test mit dieser Persona aus.
-* **Wert:** **Quantitatives "Smoke Testing".**
-    * *Antwortet auf:* "Ist der Checkout-Flow technisch kaputt?"
-    * *Antwortet auf:* "Führt dieser Link zu einer 404-Seite?"
-* **KI-Kosten:** Niedrig (1 LLM-Aufruf pro Aktion).
-* **Ergebnis:** Ein visuelles Logbuch (Klickpfad + Screenshots).
+## Die Zukunft, die wir bauen
 
-### Paket 2: "Plus" (Moderierte Simulation + Generisches Wissen)
-* **Kosten:** 5 Tokens / Persona
-* **Das Produkt:** Ein "intelligenter" Agent, der von einem KI-Researcher überwacht wird und auf generisches UX-Wissen zugreift.
-* **Module:** `Pilot` (Modul 3) + `Researcher (Full)` (Modul 2) + `Gott (Lite)` (Modul 1)
-* **Funktion:**
-    1.  **"Gott (Lite)":** Generiert die Persona "live" (wie in Basic).
-    2.  **"Pilot":** Führt den Test aus.
-    3.  **"Researcher (Full)":** Greift ein, wenn der Pilot "betrunken" ist (z.B. in einer Schleife festhängt). Stellt zwischendrin qualitative Fragen ("Warum hast du das geklickt?").
-    4.  **RAG (Wissens-Integration):** Der Researcher füttert den Piloten mit "Spickzetteln" aus einer generischen Wissensdatenbank (z.B. **Baymard, NN Group**), um die Entscheidungen realistischer zu machen.
-* **Wert:** **Qualitative Heuristik-Prüfung.**
-    * *Antwortet auf:* "Warum ist dieser Flow verwirrend?"
-    * *Antwortet auf:* "Verstößt unser Design gegen gängige UX-Best-Practices?"
-* **KI-Kosten:** Hoch (2-3 LLM-Aufrufe pro Aktion: Pilot + Researcher).
-* **Ergebnis:** Ein moderiertes Logbuch mit Rationale, Interventionen und einer finalen KI-Auswertung.
+### Phase 1: Fundament (Heute)
+KI-Agents die denken, beobachten und handeln wie echte Nutzer
 
-### Paket 3: "Premium" (Data-Driven "Gott-Modus")
-* **Kosten:** 10 Tokens / Persona
-* **Das Produkt:** Eine Simulation, die auf einem "digitalen Zwilling" echter Kundensegmente basiert.
-* **Module:** `Pilot` (Modul 3) + `Researcher (Full)` (Modul 2) + `Gott (Full)` (Modul 1)
-* **Funktion:**
-    1.  **"Gott (Full)":** Dieses Modul ist jetzt an unsere internen Daten angebunden (z.B. **Adobe Analytics**, echte UX-Befragungen). Es erstellt nicht-zufällige Personas, die reale Segmente abbilden (z.B. "Erstellt eine Persona, die das 35%-Segment repräsentiert, das bei uns immer die Suche nutzt").
-    2.  **"Researcher (Full)":** Nutzt die Datenanbindung für tiefere Analysen.
-    3.  **"Pilot":** Führt den Test aus.
-* **Wert:** **Predictive UX Analytics.**
-    * *Antwortet auf:* "Wie wird unser 35%-Such-Segment auf das neue Design reagieren?"
-    * *Antwortet auf:* "Wie verhält sich ein 'Nicht-Kunde' (Zielgruppe) auf unserer Seite im Vergleich zu einem 'Bestandskunden'?"
-* **KI-Kosten:** Sehr hoch.
-* **Ergebnis:** Ein datengesteuerter Simulationsbericht, der Hypothesen validiert und Neukunden-Strategien testet.
+### Phase 2: Erweiterte Analyse (6 Monate)
+Domain-spezifische Insights:
+- E-Commerce Checkout-Optimierung
+- SaaS Onboarding-Flows
+- Content Discoverability
+- A/B Testing Automatisierung
 
-## 3. Die Technischen Kern-Module (Die "Engine")
+### Phase 3: Barrierefreiheit (12 Monate)
+Optionale Simulation menschlicher Einschränkungen:
+- Tastatur-Only Navigation
+- Visuelle Einschränkungen (Blur, Farbenblindheit, Sehschwäche)
+- Screen Reader Experience
+- Kognitive Last Assessment
+- Motorische Einschränkungs-Szenarien
 
-### Modul 1: "Der Gott-Modus" (Persona-Fabrik)
-* **Funktion:** Erstellt die System-Prompts, die das "Wesen" eines Agenten definieren.
-* **`v1 (Paket 2)`:** Generiert Personas "on-the-fly", indem die `raw_task_input` analysiert wird (z.B. "Suche nach iPhone" -> "Pragmatische Persona").
-* **`v2 (Paket 3)`:** Generiert Personas basierend auf echten, angebundenen Analytics-Daten.
+### Phase 4: Intelligence (18 Monate)
+Agents die aus Millionen Simulationen lernen:
+- Pattern-Recognition über Sites hinweg
+- Prädiktive Issue-Erkennung
+- Branchen-spezifische Best Practices
 
-### Modul 2: "Der UX Researcher" (Moderator & RAG)
-* **Funktion:** Das taktische Gehirn. Plant, moderiert und wertet aus.
-* **`v1 (Paket 2)`:** Implementiert Schleifenerkennung und RAG (Retrieval-Augmented Generation) mit *generischem* Wissen (Baymard, NN Group).
-* **`v2 (Paket 3)`:** Führt RAG mit *internem* Wissen durch (A/B-Test-Ergebnisse, Analytics-Fakten).
+### Phase 5: Integration (24 Monate)
+Nahtlose CI/CD Pipeline Integration:
+- GitHub Actions, GitLab CI
+- Automatisierte PR-Kommentare mit Findings
+- Slack/Teams Benachrichtigungen
 
-### Modul 3: "Der Pilot" (Autonomer Agent)
-* **Funktion:** Die "Hände und Augen". Führt die Simulation aus.
-* **Technologie:** `Playwright` (für Live-Webseiten), `Appium` (für native Mobile-Apps).
-* **Kern-Schleife:** `SEHEN` (Screenshot) -> `DENKEN` (Ollama/KI-Aufruf) -> `HANDELN` (Click, Type, Hover, Swipe).
-* ****
-* **`v2 (Paket 2/3)`:** Erhält eine neue Fähigkeit. Statt eine `url` zu besuchen, kann der Pilot auch:
-    1.  **Statische Bilder (JPG/PNG) oder PDFs** verarbeiten, die vom Benutzer hochgeladen wurden.
-    2.  **Figma-Prototypen** über die Figma-API importieren und als klickbare Screenshots simulieren.
+---
 
-## 4. Technologie- & Design-Prinzipien
+## Kern-Prinzipien
 
-* **Design-Philosophie:** "Editorial Look". Hochwertig, minimalistisch, professionell (Inspiration: DeepL, Dropbox).
-* **Technologie (MVP):** `Next.js` (Frontend), `Playwright` (Browser), `Ollama` (kostengünstige lokale KI).
-* **Kern-Prinzip:** Visuelle Transparenz. Das visuelle Debug-Zip (Logs + Screenshots) ist der wertvollste Output.
-* **Architektur:** Entwicklung von einem "MVP-Monolithen" hin zu einer sauberen Trennung in `lib/`-Services (Persona-Generator, Agent-Pilot, Orchestrator).
+### 1. **Menschenzentrierte KI**
+Keine perfekten Roboter—Agents mit **realistischen menschlichen Limitierungen**:
+- Können kleine Elemente übersehen
+- Erinnerung an UI-Patterns
+- Frustration wenn festgesteckt
+- Verhalten angepasst an Persona-Typ
+
+### 2. **Actionable Insights**
+Keine "Compliance-Reports"—echte UX-Issues:
+- Priorisiert nach Schwere & Impact
+- Reproduzier-Schritte mit Screenshots
+- Fix-Vorschläge mit Code-Beispielen
+
+### 3. **Privacy & Security**
+Keine echten Nutzerdaten erforderlich:
+- Simulierte Personas, keine echten Menschen
+- Läuft auf deiner Infrastruktur
+- DSGVO-konform by Design
+- Keine PII in Test-Szenarien
+
+### 4. **Optionale Spezialisierung**
+Features nach Bedarf:
+- Basis: Standard UX-Testing
+- Advanced: Domain-spezifische Insights
+- Accessibility: Optional für Compliance-Tests
+- Enterprise: Custom Integrationen
+
+---
+
+## Erfolgs-Metriken
+
+**Kurzfristig (6 Monate):**
+- 1.000 Simulationen pro Woche
+- 50 zahlende Kunden
+- 85% Issue-Detection Genauigkeit
+
+**Langfristig (2 Jahre):**
+- Industrie-Standard für Pre-Launch UX-Validierung
+- 100.000+ Simulationen pro Monat
+- Integriert in Top 100 SaaS-Produkte
+
+---
+
+## Warum jetzt?
+
+**Konvergenz von Technologien:**
+- ✅ Vision Models (Llava) für UI-Verständnis
+- ✅ LLMs (Mistral) für Reasoning
+- ✅ Playwright für Browser-Automatisierung
+- ✅ Wachsendes Accessibility-Bewusstsein
+
+**Markt-Timing:**
+- Remote Work = schwerer traditionelles Testing
+- KI-Adoption explodiert in Dev-Tools
+- Accessibility-Klagen steigen 20% YoY
+- EU Accessibility Act Enforcement ab 2025
+
+---
+
+## Was uns unterscheidet
+
+**vs. Traditionelles UX-Testing:**
+- 100x schneller, 50x günstiger
+- Diverse Personas automatisch
+
+**vs. Automatisiertes Testing (Selenium, etc.):**
+- Versteht visuelles Layout (nicht nur DOM)
+- Adaptives Verhalten, nicht geskriptet
+
+**vs. Accessibility Checker (axe, Wave):**
+- Kann optional User Experience testen, nicht nur Compliance
+- Verhaltens-Simulation verfügbar
+
+**vs. KI Code Assistenten (GitHub Copilot):**
+- Fokussiert auf UX-Validierung, nicht Code-Generierung
+- Domain-spezifische Insights
+
+---
+
+## Unser Nordstern
+
+> **"Jede Website sollte für jeden nutzbar sein—schnell getestet, proaktiv optimiert."**
+
+Wir bauen kein Testing-Tool—wir bauen die Zukunft von UX-Research.

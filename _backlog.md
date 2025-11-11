@@ -1,43 +1,141 @@
-1. Vergleich zwischen zwei Seiten (z.B. OTTO vs. Amazon)
-2. Analyse der Ergebnisse
-3. Ein Mini-Game während man auf die Ergebnisse wartet
-4. Service-Monolithen aufbrechen und kleinere Serices bauen
-5. Anwendungsbereich der Anwendung wählen (E-Commerce, Website XY, ...)
-6. Fortschrittsanzeige der Simulation
-7. Simultanausgabe des Fortschritts?
-8. Login in testaccounts ermöglichen
-9. benachrichtigung, wenn test abgeschlossen ist.
+# Product Backlog - UX Simulation Plattform
 
+## Epic 1: Kern Simulation Engine
+**Status:** In Bearbeitung (v0.2)
 
-# Modul 1: "Gott-Modus" (Persona-Fabrik)
-Dein Item 5 (Anwendungsbereich wählen) ist der erste Schritt hierfür. Der nächste logische Schritt wäre:
+### High Priority Stories
+- [x] 1.1 ReAct Pattern Implementierung (ERLEDIGT)
+  - 5-Phasen Loop: Planen → Beobachten → Verifizieren → Handeln → Reflektieren
+  - Self-Correction durch Reflexion
+  - Confidence-basierte Fallbacks
+  
+- [ ] 1.2 Persona-getriebenes Verhalten
+  - Pragmatisch: Direkte Suchnutzung, effizienzfokussiert
+  - Explorativ: Browse-First Ansatz, Scroll-Toleranz
+  - Vorsichtig: Verifikationsschritte, Zögern modellieren
+  - Erinnerung an UI-Elemente (z.B. "Suche ist oben")
+  
+- [ ] 1.3 Element-Erkennung Verbesserungen
+  - Priorisierung von Suchfeldern und primären CTAs
+  - Erhöhung des Erkennungslimits (80 → 120 Elemente)
+  - Bessere Rollen-Erkennung für Inputs
+  - Kontext-bewusstes Element-Scoring
 
-- Data-Driven Persona Generation (Premium-Feature):
-User Story: "Als Researcher möchte ich, dass das System Personas nicht nur "live" erfindet, sondern auf Basis echter Analytics-Daten (z.B. Adobe Analytics-Exporte) generiert, um reale Kundensegmente zu simulieren."
+- [ ] 1.4 Sprach-Konsistenz
+  - Backend Language-Parameter Integration
+  - Einheitliche Prompts in gewählter Sprache
+  - Konsistente Persona-Generierung
 
-# Modul 2: "Researcher" (Moderator & RAG)
-Dein Item 2 (Analyse der Ergebnisse) ist das Ende dieses Moduls. Was noch fehlt, ist der Anfang (der "Spickzettel"):
+---
 
-- Wissens-Integration (RAG) (Plus-Feature):
-User Story: "Als Researcher möchte ich eine Wissensdatenbank (z.B. mit Baymard/NN Group-Artikeln) anbinden können, damit der KI-Researcher dem Piloten kontextbezogene 'Spickzettel' (z.B. 'Pragmatische Nutzer nutzen die Suche') geben kann."
+## Epic 2: Erweiterte Analyse
+**Status:** Geplant (v0.4)
 
-- Interaktive Moderation (Plus-Feature):
-User Story: "Als Researcher soll das System automatisch eingreifen (intervenieren), wenn der Pilot in einer Schleife festhängt (z.B. 3x derselbe Klick) und ihm eine korrigierende Anweisung geben."
+### High Priority Stories
+- [ ] 2.1 Domain-spezifische Insights
+  - E-Commerce: Checkout-Flow Reibungspunkte
+  - SaaS: Onboarding-Completion
+  - Media: Content-Discoverability
+  
+- [ ] 2.2 A/B Vergleichs-Modus
+  - Side-by-Side Test-Ausführung
+  - Diff-Visualisierung
+  - Performance-Metriken Vergleich
+  
+- [ ] 2.3 Heatmap-Generierung
+  - Aufmerksamkeitsbereiche (Llava Focus)
+  - Klick-Muster
+  - Scroll-Tiefe
+  - Frustrations-Indikatoren
 
-# Modul 3: "Pilot" (Der Agent & Test-Typen)
-Dein Item 1 (Vergleich A vs. B) ist ein super Feature. Hier sind noch zwei andere Test-Typen, die du erwähnt hast:
+---
 
-- Prototypen-Testing (Figma/Upload):
-User Story: "Als Designer möchte ich statische Screenshots, PDF-Exporte oder einen Figma-Link hochladen können, damit der Agent meinen Prototyp testen kann, bevor er live ist."
+## Epic 3: Accessibility Testing
+**Status:** Geplant (v0.5)
 
-- Mobiles App-Testing (Appium-Integration):
-User Story: "Als App-Entwickler möchte ich, dass der Pilot nicht nur Webseiten, sondern auch native iOS- oder Android-Apps (via Appium) testen kann."
+### Konzept
+Simulation menschlicher Einschränkungen um Barrieren zu finden, bevor echte Nutzer sie erleben.
 
-# Infrastruktur & Deployment (Die Basis)
-Das ist der "Deployment"-Pfad, über den wir gesprochen haben, um es für deinen Kumpel (oder Kunden) verfügbar zu machen.
+### High Priority Stories
+- [ ] 3.1 Tastatur-Only Navigation
+  - **Szenario:** Motorische Einschränkung, Power-User, Assistive Tech
+  - Tab-Navigation Simulation
+  - Focus-Indikator Sichtbarkeits-Checks
+  - Skip-Link Erkennung
+  - Keyboard-Trap Erkennung
+  - **Report:** Tab-Order Issues, fehlende Focus-States
+  
+- [ ] 3.2 Visuelle Einschränkungen
+  - **Sehschwäche:**
+    - Blur-Simulation, Kontrast-Reduktion
+    - Test mit 200%/400% Zoom
+    - Text-Reflow, Layout-Breaks prüfen
+  - **Farbenblindheit:**
+    - Deuteranopie (Rot-Grün, 8% der Männer)
+    - Protanopie (Rot-Grün)
+    - Tritanopie (Blau-Gelb)
+    - Informationen nicht nur durch Farbe vermittelt?
+  - **Report:** Kontrast-Verhältnisse, farb-abhängige Elemente
+  
+- [ ] 3.3 Screen Reader Simulation
+  - Accessibility-Tree parsen
+  - NVDA/JAWS Verhalten simulieren
+  - Fehlende Alt-Texte erkennen
+  - Semantisches HTML validieren
+  - ARIA-Label Checks
+  - Überschriften-Hierarchie validieren
+  - **Report:** Screen Reader UX Flow
 
-- Cloud-Migration (KI-Gehirn):
-User Story: "Als Entwickler muss ich den localhost:11434 (Ollama)-Aufruf durch eine Cloud-KI-API (z.B. Replicate, Groq oder OpenAI) ersetzen, damit die App im Web funktioniert."
+- [ ] 3.4 Kognitive Last Assessment
+  - Komplexe Navigations-Muster
+  - Überwältigende Informations-Dichte
+  - Unklare Labels/Instruktionen
+  - Inkonsistente UI-Patterns
+  - **Report:** Vereinfachungs-Vorschläge
 
-- Cloud-Migration (Hände & Server):
-User Story: "Als Entwickler muss ich die App auf einem Dienst deployen, der Playwright unterstützt (z.B. ein VPS oder ein Container-Dienst wie Render/Railway), da Vercel (serverless) dafür ungeeignet ist."
+### Medium Priority Stories  
+- [ ] 3.5 Motorische Einschränkungen
+  - Große Touch-Target Anforderungen (44×44px)
+  - Tremor-Simulation (ungenaue Klicks)
+  - Einhändige Nutzungs-Muster
+  
+- [ ] 3.6 WCAG Compliance Validierung
+  - Auto-Check gegen WCAG 2.1 AA/AAA
+  - Compliance-Report generieren
+  - Priorisierte Fix-Empfehlungen
+
+---
+
+## Epic 4: Kollaboration & Reporting
+**Status:** Geplant (v0.6)
+
+### High Priority Stories
+- [ ] 4.1 Team-Workspace
+  - Simulationen teilen
+  - Kommentare zu Schritten
+  - Issues an Team-Mitglieder zuweisen
+  
+- [ ] 4.2 Integration Pipeline
+  - GitHub Actions Integration
+  - Slack-Benachrichtigungen
+  - Jira-Ticket Erstellung
+  
+- [ ] 4.3 Executive Reporting
+  - PDF-Export mit Findings
+  - Trend-Analyse über Zeit
+  - ROI-Metriken (Issues gefunden vs. behoben)
+
+---
+
+## Technische Schulden
+- [ ] ReAct Loop Performance optimieren (aktuell ~4s pro Schritt)
+- [ ] Besseres Error Handling für Vision Model Failures
+- [ ] Rate Limiting für Ollama API
+- [ ] Caching für wiederholte Simulationen
+
+---
+
+## Bugs
+- [x] Sprach-Inkonsistenz (DE ↔ EN) - Behoben in v0.2
+- [ ] Suchfeld-Erkennung (nur 4-5 Elemente gefunden)
+- [ ] Vision Blind Spots für kleine UI-Elemente
