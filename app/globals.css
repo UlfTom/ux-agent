@@ -10,8 +10,12 @@
     --card-foreground: 224 71.4% 4.1%;
     --popover: 0 0% 100%;
     --popover-foreground: 224 71.4% 4.1%;
-    --primary: 220 13.0% 45.1%;
+
+    /* GEÄNDERT: Ein kräftigeres, "professionelles" Blau */
+    --primary: 217 91% 60%;
+    /* Entspricht Tailwind 'blue-600' */
     --primary-foreground: 210 20% 98%;
+
     --secondary: 220 14.3% 95.9%;
     --secondary-foreground: 222 47.4% 11.2%;
     --muted: 220 14.3% 95.9%;
@@ -24,18 +28,75 @@
     --input: 220 13% 91%;
     --ring: 224 71.4% 4.1%;
     --radius: 0.5rem;
+
     --expoOut: cubic-bezier(.16, 1, .3, 1);
+
+    body {
+      cursor: url('/cursor.svg') 4 4, auto;
+    }
   }
 
-  /*.dark {
-    (Darkmode-Variablen hier...)
-  }*/
+  /* (Darkmode-Variablen hier...) */
 }
 
-/* ==============================================
-DEIN CUSTOM HEADER CSS (JETZT KORREKT GEWICKELT)
-==============================================
-*/
+/* app/globals.css - Add these utilities */
+@layer utilities {
+  /* Font Classes */
+  .font-headline {
+    font-family: var(--font-epilogue);
+    font-weight: 900;
+  }
+  
+  .font-accent {
+    font-family: var(--font-lora);
+    font-weight: 600;
+    font-style: italic;
+  }
+  
+  .font-body {
+    font-family: var(--font-inter);
+  }
+
+  /* Letter Spacing -5% */
+  .tracking-tighter-custom {
+    letter-spacing: -0.05em;
+  }
+
+  /* 3D Transform Support */
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  /* GPU Acceleration */
+  .transform-gpu {
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  /* Grid Pattern Background */
+  .bg-grid-pattern {
+    background-image:
+      linear-gradient(to right, hsl(var(--muted)) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--muted)) 1px, transparent 1px);
+    background-size: 4rem 4rem;
+  }
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Selection */
+::selection {
+  background-color: hsl(var(--primary) / 0.3);
+  color: hsl(var(--foreground));
+}
+
 @layer components {
   #header {
     position: fixed;

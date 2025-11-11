@@ -14,7 +14,7 @@ type LogStep = { step: string; logs: string[]; image?: string; };
 const personaTypeOptions = [{ id: 'pragmatic', name: 'Pragmatisch' }, { id: 'inspirational', name: 'Inspirativ (Stöbernd)' },];
 const domainOptions = [{ id: 'ecommerce', name: 'E-Commerce' }, { id: 'travel', name: 'Reisebuchung' }, { id: 'finance', name: 'Finanzdienstleistung' },];
 
-export default function SimulationPage() { // Name ist ok, da die Datei page.tsx heißt
+export default function SimulationPage() {
     const [url, setUrl] = useState('https://www.otto.de');
     const [task, setTask] = useState('Finde eine Winter-Jeans für Damen');
     const [loading, setLoading] = useState(false);
@@ -27,9 +27,22 @@ export default function SimulationPage() { // Name ist ok, da die Datei page.tsx
     const [domain, setDomain] = useState('ecommerce');
     const [personaType, setPersonaType] = useState('pragmatic');
 
-    // --- HIER IST DER FEHLENDE CODE ---
     const handleStartSimulation = async (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault(); setLoading(true); setLog([]); setCopied(false); setProgress(30);
+        e.preventDefault();
+        setLoading(true);
+        setCopied(false);
+        setProgress(30);
+
+        // --- HIER IST DER UI-SYNC-FIX ---
+        // Setze eine initiale Lade-Nachricht im Logbuch, *bevor* der Fetch startet
+        setLog([
+            {
+                step: "Simulation wird initialisiert...",
+                logs: ["Generiere Persona (mit Mistral)...", "Starte Playwright-Browser..."]
+            }
+        ]);
+        // --- ENDE DES FIXES ---
+
         try {
             const res = await fetch('/api/run-simulation', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -38,16 +51,22 @@ export default function SimulationPage() { // Name ist ok, da die Datei page.tsx
             setProgress(70);
             const data = await res.json();
             if (!res.ok) {
+                // Überschreibe das Log mit den Fehler-Logs vom Server
                 setLog(data.log || [{ step: "FEHLER", logs: [data.message || 'Unbekannter Serverfehler'] }]);
                 throw new Error(data.message || 'Simulation fehlgeschlagen');
             }
-            setLog(data.log); setProgress(100);
+            setLog(data.log); // Überschreibe das Lade-Log mit dem echten Log
+            setProgress(100);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : "Unbekannter Fehler";
-            if (log.length === 0) { setLog([{ step: "CLIENT-FEHLER", logs: [errorMsg] }]); }
+            // Füge den Fehler zum bestehenden (Lade-)Log hinzu, falls es noch leer ist
+            if (log.length <= 1) {
+                setLog(prevLog => [...prevLog, { step: "CLIENT-FEHLER", logs: [errorMsg] }]);
+            }
             setProgress(0);
         } finally {
-            setLoading(false); setTimeout(() => setProgress(0), 1000);
+            setLoading(false);
+            setTimeout(() => setProgress(0), 1000);
         }
     };
 
@@ -80,14 +99,11 @@ export default function SimulationPage() { // Name ist ok, da die Datei page.tsx
             const a = document.createElement('a'); a.href = downloadUrl; a.download = 'simulation_debug.zip';
             document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(downloadUrl);
         } catch (error) {
-            alert(error instanceof Error ? error.message : "Unbekannter Fehler");
+            alert(error instanceof Error ? error.message : "UnbekNannter Fehler");
         }
     };
-    // --- ENDE DES FEHLENDEN CODES ---
-
 
     return (
-        // Wir verwenden py-32 (padding-top) statt mt-20, um den Header-Abstand zu machen
         <main className="container mx-auto max-w-5xl px-4 py-32">
             <div className="space-y-12">
 
@@ -200,7 +216,7 @@ export default function SimulationPage() { // Name ist ok, da die Datei page.tsx
                                                 <img src={`data:image/png;base64,${step.image}`} alt={`Screenshot für ${step.step}`} className="w-full rounded-md border-2 border-slate-300" />
                                             </div>
                                         )}
-                                        <pre className="text-sm bg-white text-slate-600 p-4 overflow-x-auto">
+                                        <pre className="text-sm bg-white text-slate-600 p-4 overflow-x-auto whitespace-pre-wrap">
                                             {step.logs.join('\n')}
                                         </pre>
                                     </div>
