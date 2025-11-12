@@ -20,19 +20,23 @@ export async function checkAndDismissCookie(
     logs: string[]
 ): Promise<boolean> {
     try {
-        const cookieRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all|Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it)$/i;
-        const cookieButton = page.getByRole('button', { name: cookieRegex }).first();
+        // Robusteres Regex
+        const cookieRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all|Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it|Ich stimme zu)$/i;
 
-        const isVisible = await cookieButton.isVisible({ timeout: 1000 });
+        // ⭐️ KORREKTUR: Suche nach Text statt nur 'button' role.
+        // Das findet auch <a role="button"> oder <div>-basierte Buttons.
+        const cookieButton = page.locator(`*:text-matches("${cookieRegex}")`).first();
+
+        const isVisible = await cookieButton.isVisible({ timeout: 1500 }); // Etwas mehr Zeit geben
         if (isVisible) {
-            logs.push('🍪 Cookie-Banner! Klicke OK...');
-            await cookieButton.click({ timeout: 3000 });
-            await page.waitForTimeout(500);
+            logs.push('🍪 Cookie-Banner gefunden! Klicke...');
+            await cookieButton.click({ timeout: 3000, force: true }); // force: true klickt auch wenn was davor liegt
+            await page.waitForTimeout(1000); // Warten bis Banner weg-animiert ist
             logs.push('✓ Cookie dismissed');
             return true;
         }
     } catch {
-        // No cookie
+        // Kein Cookie-Banner gefunden, alles gut
     }
     return false;
 }

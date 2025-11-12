@@ -157,15 +157,27 @@ Respond in JSON format:
     const prompt = language === 'de' ? promptDE : promptEN;
 
     try {
-        const response = await callOllama('llama3.2:latest', prompt, undefined, language, undefined); // Kein 'json' erzwingen
+        // ⭐️ KORREKTUR: Kein 'json' format erzwingen, da unzuverlässig
+        const response = await callOllama('llama3.2:latest', prompt, undefined, language, undefined);
 
-        // Suche nach dem JSON-Block in der Antwort
+        // ⭐️ KORREKTUR: JSON manuell aus der Antwort extrahieren
         const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (!jsonMatch || !jsonMatch[0]) {
+            // Wenn kein JSON, prüfen ob es eine einfache Aktion ist (z.B. "scroll")
+            if (response.toLowerCase().includes('scroll')) {
+                return {
+                    match: true,
+                    confidence: 0.6,
+                    action: 'scroll',
+                    scrollDirection: 'down',
+                    rationale: `Fallback: KI hat 'scroll' vorgeschlagen. (${response})`
+                };
+            }
             throw new Error(`Ollama hat kein valides JSON zurückgegeben. Antwort: ${response.substring(0, 50)}...`);
         }
 
         const parsed = JSON.parse(jsonMatch[0]);
+        // --- Ende der robusten JSON-Extraktion ---
 
         // CRITICAL FIX: If LLM selects wrong element type, override
         if (parsed.action === 'click' && parsed.elementId !== undefined) {
