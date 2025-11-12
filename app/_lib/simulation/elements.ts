@@ -1,322 +1,244 @@
 // app/_lib/simulation/elements.ts
-// FIX: Better product link detection + prioritization
+// FIX: Multi-strategy product detection
 
 import { Page } from 'playwright';
-import { InteractableElement } from './types';
+import type { InteractableElement } from './types';
 
-// Primary selectors (most specific, prioritized)
-const PRIMARY_SELECTORS = [
-    // Search fields (highest priority)
-    'input[type="search"]',
-    'input[type="text"][placeholder*="such" i]',
-    'input[type="text"][placeholder*="search" i]',
-    '[role="search"] input',
-    '[role="searchbox"]',
-    // All text inputs
-    'input[type="text"]',
-    'textarea',
-    // Buttons
-    'button:not([aria-hidden="true"]):not([disabled])',
-    '[role="button"]:not([aria-hidden="true"])',
-    // Links
-    'a[href]:not([aria-hidden="true"])',
-    '[role="link"]',
-    // Other inputs
-    'input[type="email"]',
-    'input[type="password"]',
-    'select',
-];
+export async function getInteractableElements(page: Page): Promise<InteractableElement[]> {
+    try {
+        const elements = await page.evaluate(() => {
+            const results: Array<{
+                index: number;
+                realIndex: number;
+                role: 'link' | 'button' | 'textbox';
+                box: { x: number; y: number; width: number; height: number };
+                text: string;
+                placeholder: string | null;
+                isHoverTarget: boolean;
+                priorityScore: number;
+                href?: string;
+                ariaLabel?: string;
+                classes?: string;
+            }> = [];
 
-// Fallback: Broader selectors
-const FALLBACK_SELECTORS = [
-    'input:not([type="hidden"])',
-    'button',
-    'a',
-    'textarea',
-    'select',
-    '[onclick]',
-    '[role="button"]',
-    '[role="link"]',
-    '[tabindex="0"]',
-    '[tabindex="1"]',
-];
+            let globalIndex = 0;
 
-function calculatePriorityScore(
-    role: 'link' | 'button' | 'textbox',
-    text: string,
-    placeholder: string | null,
-    ariaRole: string | null,
-    tagName: string,
-    inputType: string | null,
-    href: string | null // ← NEW: Pass href for product detection
-): number {
-    let score = 0;
-
-    // Textboxes get highest base priority
-    if (role === 'textbox') {
-        score = 1000;
-
-        // Extra boost for search-related fields
-        const isSearchField =
-            inputType === 'search' ||
-            placeholder?.toLowerCase().includes('such') ||
-            placeholder?.toLowerCase().includes('search') ||
-            text.toLowerCase().includes('such') ||
-            text.toLowerCase().includes('search') ||
-            ariaRole === 'searchbox';
-
-        if (isSearchField) {
-            score = 2000; // TOP PRIORITY!
-        }
-    } else if (role === 'button') {
-        score = 500;
-
-        // Boost for primary action buttons
-        const isPrimaryCTA =
-            text.toLowerCase().includes('suchen') ||
-            text.toLowerCase().includes('search') ||
-            text.toLowerCase().includes('kaufen') ||
-            text.toLowerCase().includes('buy');
-
-        if (isPrimaryCTA) {
-            score = 700;
-        }
-    } else if (role === 'link') {
-        score = 100; // Base score for links
-
-        // CRITICAL FIX: Detect PRODUCT links by href and text
-        const isProductLink = (
-            href &&
-            (
-                href.includes('/p/') ||
-                href.includes('/product/') ||
-                href.includes('/artikel/') ||
-                href.includes('/item/')
-            )
-        );
-
-        const hasProductText = (
-            text.length > 20 && // Product names are usually longer
-            !text.toLowerCase().includes('home') &&
-            !text.toLowerCase().includes('konto') &&
-            !text.toLowerCase().includes('service') &&
-            !text.toLowerCase().includes('merkzettel') &&
-            !text.toLowerCase().includes('warenkorb') &&
-            !text.toLowerCase().includes('menu') &&
-            !text.toLowerCase().includes('navigation')
-        );
-
-        if (isProductLink || hasProductText) {
-            score = 900; // HIGH PRIORITY for product links!
-            console.log(`[ELEMENTS] 🎯 Product link detected: "${text.substring(0, 50)}" (href: ${href})`);
-        }
-
-        // PENALIZE header/navigation links
-        const isNavLink = (
-            text.toLowerCase().includes('mein konto') ||
-            text.toLowerCase().includes('service') ||
-            text.toLowerCase().includes('merkzettel') ||
-            text.toLowerCase().includes('warenkorb') ||
-            text.toLowerCase().includes('home') ||
-            text.toLowerCase().includes('weihnachten') ||
-            text.toLowerCase().includes('damen-mode') ||
-            text.toLowerCase().includes('herren-mode') ||
-            text.toLowerCase().includes('baby') ||
-            text.toLowerCase().includes('sport') ||
-            text.toLowerCase().includes('beauty') ||
-            text.toLowerCase().includes('multimedia') ||
-            text.toLowerCase().includes('haushalt') ||
-            text.toLowerCase().includes('küche') ||
-            text.toLowerCase().includes('marken') ||
-            text.toLowerCase().includes('sale')
-        );
-
-        if (isNavLink) {
-            score = 50; // VERY LOW priority for nav links!
-            console.log(`[ELEMENTS] ⚠️ Nav link detected (low priority): "${text.substring(0, 30)}"`);
-        }
-    }
-
-    return score;
-}
-
-export async function getInteractableElements(
-    page: Page,
-    maxElements: number = 120
-): Promise<InteractableElement[]> {
-    console.log(`[ELEMENTS] Starting element detection...`);
-
-    // TRY PRIMARY SELECTORS FIRST
-    let selector = PRIMARY_SELECTORS.join(', ');
-    let locators = page.locator(selector);
-    let count = await locators.count();
-
-    console.log(`[ELEMENTS] Primary selectors found: ${count} elements`);
-
-    // FALLBACK if nothing found
-    if (count === 0) {
-        console.warn(`[ELEMENTS] ⚠️ No elements with primary selectors, trying fallback...`);
-        selector = FALLBACK_SELECTORS.join(', ');
-        locators = page.locator(selector);
-        count = await locators.count();
-        console.log(`[ELEMENTS] Fallback selectors found: ${count} elements`);
-    }
-
-    // LAST RESORT: Accept visible elements with certain tags
-    if (count === 0) {
-        console.error(`[ELEMENTS] ⚠️⚠️ Still no elements, using catch-all...`);
-        selector = 'button, a, input, textarea, select';
-        locators = page.locator(selector);
-        count = await locators.count();
-        console.log(`[ELEMENTS] Catch-all found: ${count} elements`);
-    }
-
-    const elements: InteractableElement[] = [];
-    let cleanIdCounter = 0;
-    let skipped = {
-        notVisible: 0,
-        noBox: 0,
-        tooSmall: 0,
-        noText: 0,
-        notInteractive: 0
-    };
-
-    const maxCount = Math.min(count, maxElements);
-
-    for (let i = 0; i < maxCount; i++) {
-        const locator = locators.nth(i);
-
-        // 1. Check bounding box
-        let box: { x: number; y: number; width: number; height: number } | null = null;
-        try {
-            box = await locator.boundingBox({ timeout: 300 });
-        } catch (e) {
-            skipped.noBox++;
-            continue;
-        }
-
-        if (!box || box.width === 0 || box.height === 0) {
-            skipped.noBox++;
-            continue;
-        }
-
-        if (box.width < 10 || box.height < 10) {
-            skipped.tooSmall++;
-            continue;
-        }
-
-        // 2. RELAXED visibility check
-        try {
-            const isExplicitlyHidden = await locator.evaluate(el => {
+            // Helper: Check if element is visible
+            function isVisible(el: Element): boolean {
+                if (!(el instanceof HTMLElement)) return false;
+                const rect = el.getBoundingClientRect();
                 const style = window.getComputedStyle(el);
                 return (
-                    style.display === 'none' ||
-                    style.visibility === 'hidden' ||
-                    style.opacity === '0' ||
-                    (el as HTMLElement).hidden
+                    rect.width > 0 &&
+                    rect.height > 0 &&
+                    rect.top < window.innerHeight &&
+                    rect.bottom > 0 &&
+                    style.display !== 'none' &&
+                    style.visibility !== 'hidden' &&
+                    style.opacity !== '0'
                 );
-            }, { timeout: 200 });
-
-            if (isExplicitlyHidden) {
-                skipped.notVisible++;
-                continue;
             }
-        } catch (e) {
-            console.warn(`[ELEMENTS] Could not check visibility for element ${i}, assuming visible`);
-        }
 
-        // 3. Get element properties
-        const tagName = await locator.evaluate(el => el.tagName.toUpperCase());
-        const inputType = await locator.getAttribute('type');
-        const href = await locator.getAttribute('href'); // ← NEW: Get href
+            // Helper: Calculate priority score
+            function calculatePriority(el: HTMLElement, role: string, text: string, href?: string, ariaLabel?: string): number {
+                let score = 100;
 
-        // 4. Determine role
-        let role: 'link' | 'button' | 'textbox' = 'button';
-        if (tagName === 'A') role = 'link';
-        if (tagName === 'INPUT' || tagName === 'TEXTAREA') role = 'textbox';
-        if (tagName === 'SELECT') role = 'button';
+                // ═══════════════════════════════════════════════════════════
+                // STRATEGY 1: Product Link Detection (Multiple patterns)
+                // ═══════════════════════════════════════════════════════════
+                if (role === 'link' && href) {
+                    const hrefLower = href.toLowerCase();
 
-        const ariaRole = await locator.getAttribute('role');
-        if (ariaRole === 'link' || ariaRole === 'listitem' || ariaRole === 'option') role = 'link';
-        if (ariaRole === 'button') role = 'button';
-        if (ariaRole === 'textbox' || ariaRole === 'searchbox') role = 'textbox';
+                    // OTTO-specific product patterns
+                    if (
+                        hrefLower.includes('/p/') ||           // /p/{product-id}
+                        hrefLower.includes('/produkt/') ||     // /produkt/{name}
+                        hrefLower.includes('/artikel/') ||     // /artikel/{id}
+                        hrefLower.match(/\/[a-z]+-\d{7,}/)     // /name-1234567
+                    ) {
+                        score += 800;  // HIGH PRIORITY!
+                        console.log(`[PRODUCT LINK DETECTED] href: ${href.substring(0, 50)}, score: ${score}`);
+                    }
 
-        // 5. Get text content
-        let text = '';
-        try {
-            const innerText = await locator.innerText({ timeout: 200 });
-            const ariaLabel = await locator.getAttribute('aria-label');
-            const title = await locator.getAttribute('title');
-            const placeholder = await locator.getAttribute('placeholder');
-            const alt = await locator.getAttribute('alt');
+                    // Price indication in link text
+                    if (text && (text.includes('€') || text.includes('ab ') || text.match(/\d+,\d{2}/))) {
+                        score += 300;
+                    }
 
-            text = (innerText || ariaLabel || title || placeholder || alt || '').trim();
-        } catch {
-            // Ignore errors
-        }
+                    // Brand names often in product links
+                    const brandKeywords = ['ESRA', 'ARIZONA', 'G4FREE', 'ONLY', 'WITT', 'NORDCAP', "HAILY'S"];
+                    if (brandKeywords.some(brand => text.toUpperCase().includes(brand))) {
+                        score += 200;
+                    }
 
-        let placeholder: string | null = null;
-        if (role === 'textbox') {
-            placeholder = (await locator.getAttribute('placeholder')) || null;
-            if (!text && placeholder) text = placeholder;
-        }
+                    // Negative: Navigation/Account links
+                    if (
+                        hrefLower.includes('/konto') ||
+                        hrefLower.includes('/mein') ||
+                        hrefLower.includes('/service') ||
+                        hrefLower.includes('/merkzettel') ||
+                        hrefLower.includes('/warenkorb') ||
+                        hrefLower.includes('/kategorien') ||
+                        hrefLower === '/' ||
+                        hrefLower === '#'
+                    ) {
+                        score -= 900; // DEPRIORITIZE!
+                    }
+                }
 
-        // 6. Generate fallback text if empty
-        if (!text || text.length === 0) {
-            const id = await locator.getAttribute('id');
-            const className = await locator.getAttribute('class');
-            text = `${tagName}${id ? '#' + id : ''}${className ? '.' + className.split(' ')[0] : ''}`;
+                // ═══════════════════════════════════════════════════════════
+                // STRATEGY 2: Visual Product Card Detection
+                // ═══════════════════════════════════════════════════════════
+                const classNames = el.className?.toString().toLowerCase() || '';
+                const ariaLabelLower = (ariaLabel || '').toLowerCase();
 
-            // RELAXED: Accept even without text for important elements
-            if (!id && !className && role !== 'textbox') {
-                skipped.noText++;
-                continue;
+                // Product card classes
+                if (
+                    classNames.includes('product') ||
+                    classNames.includes('artikel') ||
+                    classNames.includes('item') ||
+                    classNames.includes('tile') ||
+                    ariaLabelLower.includes('produkt') ||
+                    ariaLabelLower.includes('article')
+                ) {
+                    score += 400;
+                }
+
+                // ═══════════════════════════════════════════════════════════
+                // STRATEGY 3: Text-based Product Detection
+                // ═══════════════════════════════════════════════════════════
+                const textLower = text.toLowerCase();
+
+                // Product names often contain these
+                if (textLower.includes('jeans') || textLower.includes('hose') || textLower.includes('thermohose')) {
+                    score += 200;
+                }
+
+                // Size/Material indicators
+                if (textLower.match(/größe|size|xl|xxl|material|baumwolle/)) {
+                    score += 150;
+                }
+
+                // ═══════════════════════════════════════════════════════════
+                // STRATEGY 4: Contextual boost from parent
+                // ═══════════════════════════════════════════════════════════
+                let parent = el.parentElement;
+                let depth = 0;
+                while (parent && depth < 3) {
+                    const parentClass = parent.className?.toString().toLowerCase() || '';
+                    if (parentClass.includes('grid') || parentClass.includes('list') || parentClass.includes('result')) {
+                        score += 100;
+                        break;
+                    }
+                    parent = parent.parentElement;
+                    depth++;
+                }
+
+                // ═══════════════════════════════════════════════════════════
+                // Negative scoring for non-products
+                // ═══════════════════════════════════════════════════════════
+                const navKeywords = ['navigation', 'header', 'footer', 'sidebar', 'menu', 'banner', 'cookie'];
+                if (navKeywords.some(kw => classNames.includes(kw) || textLower.includes(kw))) {
+                    score -= 500;
+                }
+
+                // Empty or very short text (likely decorative)
+                if (text.trim().length < 3) {
+                    score -= 200;
+                }
+
+                return Math.max(0, score);
             }
-        }
 
-        // 7. Calculate priority (with href for product detection)
-        const priorityScore = calculatePriorityScore(role, text, placeholder, ariaRole, tagName, inputType, href);
+            // Collect Links
+            document.querySelectorAll('a[href]').forEach((el) => {
+                if (!isVisible(el)) return;
+                const rect = el.getBoundingClientRect();
+                const text = (el.textContent || '').trim();
+                const href = (el as HTMLAnchorElement).href;
+                const ariaLabel = el.getAttribute('aria-label');
+                const priority = calculatePriority(el as HTMLElement, 'link', text, href, ariaLabel || undefined);
 
-        elements.push({
-            id: cleanIdCounter,
-            realIndex: i,
-            role,
-            box,
-            text: text.substring(0, 80),
-            placeholder,
-            isHoverTarget: false,
-            priorityScore
+                if (priority > 0) {
+                    results.push({
+                        index: results.length,
+                        realIndex: globalIndex++,
+                        role: 'link',
+                        box: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+                        text: text.substring(0, 150),
+                        placeholder: null,
+                        isHoverTarget: false,
+                        priorityScore: priority,
+                        href: href.substring(0, 200),
+                        ariaLabel: ariaLabel || undefined,
+                        classes: (el as HTMLElement).className.toString().substring(0, 100)
+                    });
+                }
+            });
+
+            // Collect Buttons
+            document.querySelectorAll('button').forEach((el) => {
+                if (!isVisible(el)) return;
+                const rect = el.getBoundingClientRect();
+                const text = (el.textContent || '').trim();
+                const ariaLabel = el.getAttribute('aria-label');
+                const priority = calculatePriority(el, 'button', text, undefined, ariaLabel || undefined);
+
+                if (priority > 50 && text.length > 0) {
+                    results.push({
+                        index: results.length,
+                        realIndex: globalIndex++,
+                        role: 'button',
+                        box: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+                        text: text.substring(0, 150),
+                        placeholder: null,
+                        isHoverTarget: false,
+                        priorityScore: priority
+                    });
+                }
+            });
+
+            // Collect Textboxes
+            document.querySelectorAll('input[type="text"], input[type="search"], input:not([type])').forEach((el) => {
+                if (!isVisible(el)) return;
+                const rect = el.getBoundingClientRect();
+                const inputEl = el as HTMLInputElement;
+                const priority = calculatePriority(el as HTMLElement, 'textbox', inputEl.value, undefined);
+
+                results.push({
+                    index: results.length,
+                    realIndex: globalIndex++,
+                    role: 'textbox',
+                    box: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+                    text: inputEl.value,
+                    placeholder: inputEl.placeholder || null,
+                    isHoverTarget: false,
+                    priorityScore: priority + 150 // Textboxes are important
+                });
+            });
+
+            // Sort by priority (highest first)
+            results.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
+
+            // Reassign indices after sort
+            results.forEach((r, i) => { r.index = i; });
+
+            console.log(`[ELEMENTS] Total found: ${results.length}`);
+            console.log(`[ELEMENTS] Top 5 by priority:`, results.slice(0, 5).map(r => ({
+                id: r.index,
+                role: r.role,
+                text: r.text.substring(0, 30),
+                score: r.priorityScore,
+                href: r.href?.substring(0, 40)
+            })));
+
+            return results;
         });
 
-        cleanIdCounter++;
-
-        // Early exit if we have enough high-priority elements
-        if (elements.filter(e => (e.priorityScore || 0) >= 1000).length >= 30) {
-            console.log(`[ELEMENTS] Early exit: Found 30+ high-priority elements`);
-            break;
-        }
+        console.log(`[ELEMENTS] Returning ${elements.length} elements to server`);
+        return elements as unknown as InteractableElement[];
+    } catch (error) {
+        console.error('[ELEMENTS] Error:', error);
+        return [];
     }
-
-    console.log(`[ELEMENTS] ✅ Collected ${elements.length} valid elements`);
-    console.log(`[ELEMENTS] Skipped: ${JSON.stringify(skipped)}`);
-
-    if (elements.length > 0) {
-        // Sort by priority
-        elements.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0));
-
-        // Reassign IDs after sorting
-        elements.forEach((el, idx) => {
-            el.id = idx;
-        });
-
-        // Log top elements
-        console.log(`[ELEMENTS] Top 10 elements:`, elements.slice(0, 10).map(e => ({
-            id: e.id,
-            role: e.role,
-            text: e.text.substring(0, 30),
-            score: e.priorityScore
-        })));
-    }
-
-    return elements;
 }
