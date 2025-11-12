@@ -20,7 +20,7 @@ export async function checkAndDismissCookie(
     logs: string[]
 ): Promise<boolean> {
     try {
-        const cookieRegex = /^(OK|Alle akzeptieren|Akzeptieren|Accept|Verstanden|Einwilligung|Zustimmen)$/i;
+        const cookieRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all|Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it)$/i;
         const cookieButton = page.getByRole('button', { name: cookieRegex }).first();
 
         const isVisible = await cookieButton.isVisible({ timeout: 1000 });

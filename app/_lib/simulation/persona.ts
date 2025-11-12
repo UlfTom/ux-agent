@@ -207,7 +207,7 @@ Answer ONLY with the formatted persona text. No additional comments.`;
     console.log('[PERSONA] Generating structured persona...');
 
     try {
-        const result = await callOllama('mistral', prompt);
+        const result = await callOllama('mistral:latest', prompt);
 
         console.log('[PERSONA] Generated successfully');
         return result;

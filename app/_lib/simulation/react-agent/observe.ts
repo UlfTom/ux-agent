@@ -122,8 +122,7 @@ Describe what you see (2-4 sentences, incl. product selection if possible):`;
     const prompt = language === 'de' ? promptDE : promptEN;
 
     try {
-        const observation = await callOllama('llava', prompt, 'text');
-
+        const observation = await callOllama('llava:latest', prompt, screenshotBase64, language, undefined);
         console.log(`[OBSERVE] ✅ Vision observation: ${observation.substring(0, 200)}...`);
 
         // CRITICAL FIX: Enrich with code-based data

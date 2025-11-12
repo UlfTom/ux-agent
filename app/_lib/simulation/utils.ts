@@ -23,7 +23,7 @@ export async function retryAsync<T>(
 
 // ERWEITERT: Unterstützt jetzt auch Model-Varianten mit :latest
 export async function callOllama(
-    model: 'mistral' | 'llava' | 'llama3.2:latest' | 'llava:latest',
+    model: 'mistral:latest' | 'llava:latest' | 'llama3.2:latest',
     prompt: string,
     imageBase64?: string, // GEÄNDERT: Einfacher Parameter
     language: Language = 'de',
@@ -31,10 +31,9 @@ export async function callOllama(
 ): Promise<string> {
     return await retryAsync(async () => {
         // Normalize model name (remove :latest suffix for API)
-        const baseModel = model.includes('llama') ? 'llama3.2' : model.replace(':latest', '');
 
         const body: any = {
-            model: baseModel,
+            model: model,
             prompt,
             stream: false,
         };

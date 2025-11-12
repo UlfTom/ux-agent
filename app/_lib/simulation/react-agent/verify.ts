@@ -7,7 +7,7 @@ import { InteractableElement, SessionState, Language } from '../types';
 export type VerificationResult = {
     match: boolean;
     confidence: number;
-    action: 'click' | 'type' | 'scroll' | 'wait';
+    action: 'click' | 'type' | 'scroll' | 'wait' | 'swipe' | 'longPress' | 'doubleTap'; // ERWEITERT
     elementId?: number;
     textToType?: string;
     scrollDirection?: 'up' | 'down';
@@ -157,8 +157,15 @@ Respond in JSON format:
     const prompt = language === 'de' ? promptDE : promptEN;
 
     try {
-        const response = await callOllama('llama3.2:latest', prompt, 'json');
-        const parsed = JSON.parse(response);
+        const response = await callOllama('llama3.2:latest', prompt, undefined, language, undefined); // Kein 'json' erzwingen
+
+        // Suche nach dem JSON-Block in der Antwort
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (!jsonMatch || !jsonMatch[0]) {
+            throw new Error(`Ollama hat kein valides JSON zurückgegeben. Antwort: ${response.substring(0, 50)}...`);
+        }
+
+        const parsed = JSON.parse(jsonMatch[0]);
 
         // CRITICAL FIX: If LLM selects wrong element type, override
         if (parsed.action === 'click' && parsed.elementId !== undefined) {

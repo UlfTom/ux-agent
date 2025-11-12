@@ -17,6 +17,8 @@ import fs from 'fs/promises';
 const MAX_STEPS = 9;
 const SCROLL_LIMIT = 3;
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
     const startTime = Date.now();
     let browser: any = null;
@@ -164,7 +166,7 @@ export async function POST(request: NextRequest) {
 
             // EXECUTE
             console.log(`[STEP ${step}] Executing: ${verification.action}`);
-            const actionResult = await executeAction(verification, page, elements, task);
+            const actionResult = await executeAction(verification, page, elements, task, personaType);
             console.log(`[STEP ${step}] Result: "${actionResult}"`);
 
             // Update state

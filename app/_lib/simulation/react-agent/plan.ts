@@ -1,5 +1,4 @@
 // app/_lib/simulation/react-agent/plan.ts
-// FIX: Product selection awareness
 
 import { callOllama } from '../utils';
 import { SessionState, PersonaType, Language } from '../types';
@@ -12,137 +11,94 @@ export async function getPlan(
     currentUrl: string,
     language: Language = 'de'
 ): Promise<string> {
-    console.log(`[PLAN] Creating plan for URL: ${currentUrl}`);
-    console.log(`[PLAN] Session state:`, {
-        searchSubmitted: sessionState.searchSubmitted,
-        onSearchResults: sessionState.onSearchResults,
-        onProductPage: sessionState.onProductPage
-    });
+    console.log(`[PLAN] Generiere generischen Plan für: ${currentUrl}`);
 
-    // CRITICAL FIX: Detect what phase we're in
-    const isOnSearchResults = currentUrl.includes('/suche/') || currentUrl.includes('/search/');
-    const isOnProductPage = currentUrl.includes('/p/') || currentUrl.includes('/produkt/');
-    const isHomepage = currentUrl === 'https://www.otto.de' || currentUrl === 'https://www.otto.de/';
+    // 1. Generische URL-Analyse (Funktioniert für jede Domain)
+    let urlObj;
+    try {
+        urlObj = new URL(currentUrl);
+    } catch (e) {
+        urlObj = { pathname: '/', search: '' };
+    }
 
-    const contextDE = `
-**Aktueller Stand:**
-- URL: ${currentUrl}
-- Auf Startseite: ${isHomepage ? 'JA' : 'NEIN'}
-- Auf Suchergebnisseite: ${isOnSearchResults ? 'JA' : 'NEIN'}
-- Auf Produktseite: ${isOnProductPage ? 'JA' : 'NEIN'}
-- Suche abgeschickt: ${sessionState.searchSubmitted ? 'JA' : 'NEIN'}
-- Letzte Aktion: ${sessionState.lastAction || 'keine'}
+    // Startseite: Pfad ist leer oder nur '/'
+    const isHomepage = urlObj.pathname === '/' || urlObj.pathname === '' || urlObj.pathname === '/index.html';
+
+    // Suchergebnisse: Typische Indikatoren in URL
+    const isSearchPage = currentUrl.includes('q=') ||
+        currentUrl.includes('search') ||
+        currentUrl.includes('suche') ||
+        currentUrl.includes('query');
+
+    // Kontext für die KI zusammenstellen
+    const context = language === 'de' ? `
+**Navigations-Kontext:**
+- Aktuelle URL: ${currentUrl}
+- Seitentyp (geschätzt): ${isHomepage ? 'STARTSEITE (Einstieg)' : isSearchPage ? 'SUCHERGEBNISSE / LISTE' : 'UNTERSEITE / DETAIL'}
+- Letzte Aktion: ${sessionState.lastAction || 'Start der Session'}
+- Suche bereits genutzt: ${sessionState.searchSubmitted ? 'JA' : 'NEIN'}
+` : `
+**Navigation Context:**
+- Current URL: ${currentUrl}
+- Page Type (estimated): ${isHomepage ? 'HOMEPAGE (Entry)' : isSearchPage ? 'SEARCH RESULTS / LIST' : 'SUBPAGE / DETAIL'}
+- Last Action: ${sessionState.lastAction || 'Session Start'}
+- Search used: ${sessionState.searchSubmitted ? 'YES' : 'NO'}
 `;
 
-    const contextEN = `
-**Current Status:**
-- URL: ${currentUrl}
-- On homepage: ${isHomepage ? 'YES' : 'NO'}
-- On search results: ${isOnSearchResults ? 'YES' : 'NO'}
-- On product page: ${isOnProductPage ? 'YES' : 'NO'}
-- Search submitted: ${sessionState.searchSubmitted ? 'YES' : 'NO'}
-- Last action: ${sessionState.lastAction || 'none'}
+    // 2. Generische Verhaltensregeln (Domain-Agnostisch)
+    const strategyDE = `
+**GENERISCHE NAVIGATIONS-STRATEGIE:**
+
+Du bist ein universeller User-Agent. Du weißt NICHT, auf welcher Art von Website du bist (es könnte ein Shop, ein Jobportal, eine News-Seite oder ein Buchungstool sein).
+
+**Deine Regeln für den nächsten Schritt:**
+
+1. **Auf einer STARTSEITE:**
+   - Orientierung ist das Ziel.
+   - Wenn die Aufgabe spezifisch ist ("Finde X"), ist die **SUCHE** meist der beste Weg.
+   - Wenn die Aufgabe offen ist ("Stöbere..."), nutze die **NAVIGATION** oder Kategorien.
+   - Achte auf Popups (Cookies), die den Weg versperren.
+
+2. **Auf einer LISTEN- / ERGEBNISSEITE:**
+   - Scanne die Ergebnisse visuell.
+   - Wenn Ergebnisse passen: Wähle das beste aus.
+   - Wenn Ergebnisse unpassend sind: Nutze Filter oder verfeinere die Suche.
+   - Wenn nichts sichtbar ist: Scrolle.
+
+3. **Auf einer DETAILSEITE:**
+   - Prüfe, ob dies das Ziel der Aufgabe erfüllt.
+   - Führe die Ziel-Aktion aus (z.B. "Kaufen", "Bewerben", "Lesen", "Kontaktieren").
+
+**Entscheide basierend auf deiner Persona ("${personaType}"):**
+- Pragmatisch: Wählt den direktesten Weg (Suche).
+- Explorativ: Klickt sich eher durch Menüs und Inspirationen.
+- Vorsichtig: Liest Details genau, sucht nach Vertrauenssignalen.
+
+Formuliere deinen nächsten Schritt kurz und präzise (ohne Annahmen über den Inhalt der Seite).
 `;
 
-    const promptDE = `${personaPrompt}
+    const prompt = `${personaPrompt}
 
-**Deine Aufgabe:**
-"${task}"
+**Task:** "${task}"
 
-${contextDE}
+${context}
 
-**WICHTIG - PRODUKT-AUSWAHLLOGIK:**
+${strategyDE}
 
-Wenn du auf der Suchergebnisseite bist:
-1. **ERSTE PRIORITÄT:** Schaue dir die Produkte an (scroll wenn nötig)
-2. **ZWEITE PRIORITÄT:** Wähle EIN Produkt aus das dir gefällt
-3. **DRITTE PRIORITÄT:** Klicke darauf um Details zu sehen
-
-**Entscheidungskriterien für Produktauswahl:**
-- ${personaType === 'Pragmatisch & Zielorientiert' ? 'Preis-Leistung, gute Bewertungen, schneller Versand' : ''}
-- ${personaType === 'Explorativ & Neugierig' ? 'Ausgefallenes Design, neue Marken, interessante Features' : ''}
-- ${personaType === 'Vorsichtig & Skeptisch' ? 'Bekannte Marken, viele Bewertungen, detaillierte Infos' : ''}
-- Passt das Produkt zur Aufgabe? (z.B. "Winter-Jeans" → warm, gefüttert)
-
-**Wenn KEINE Produkte passen:**
-- Sage klar: "Keines der Produkte passt, weil [Grund]"
-- Überlege Filter anzuwenden (Größe, Preis, Farbe)
-
-**Was ist dein nächster konkreter Schritt?** (1 kurzer Satz, max 10 Worte)
-Beispiele:
-- "Produkte anschauen"
-- "Blaue Jeans in Position 2 auswählen"
-- "Nach unten scrollen für mehr Produkte"
-- "Auf Winter-Jeans mit Fleecefutter klicken"
-- "Keine passende Hose, Filter öffnen"
+**Was ist dein nächster logischer Schritt?** (1 kurzer Satz)
+Beispiele für gute, generische Pläne:
+- "Suchfunktion nutzen um Ziel zu finden"
+- "Liste durchgehen und passenden Eintrag wählen"
+- "Nach unten scrollen um mehr Inhalte zu sehen"
+- "Details prüfen und Aktion ausführen"
 
 Dein Plan:`;
 
-    const promptEN = `${personaPrompt}
-
-**Your Task:**
-"${task}"
-
-${contextEN}
-
-**IMPORTANT - PRODUCT SELECTION LOGIC:**
-
-When on search results page:
-1. **FIRST PRIORITY:** Look at the products (scroll if needed)
-2. **SECOND PRIORITY:** Choose ONE product you like
-3. **THIRD PRIORITY:** Click on it to see details
-
-**Decision criteria for product selection:**
-- ${personaType === 'Pragmatisch & Zielorientiert' ? 'Price-value, good reviews, fast shipping' : ''}
-- ${personaType === 'Explorativ & Neugierig' ? 'Unique design, new brands, interesting features' : ''}
-- ${personaType === 'Vorsichtig & Skeptisch' ? 'Known brands, many reviews, detailed info' : ''}
-- Does the product fit the task? (e.g. "winter jeans" → warm, lined)
-
-**If NO products fit:**
-- Say clearly: "None of the products fit because [reason]"
-- Consider applying filters (size, price, color)
-
-**What is your next concrete step?** (1 short sentence, max 10 words)
-Examples:
-- "Look at products"
-- "Select blue jeans in position 2"
-- "Scroll down for more products"
-- "Click on winter jeans with fleece lining"
-- "No suitable pants, open filter"
-
-Your plan:`;
-
-    const prompt = language === 'de' ? promptDE : promptEN;
-
     try {
-        let plan = await callOllama('llama3.2:latest', prompt, 'text');
-
-        // CRITICAL FIX: If on search results and plan is vague, make it specific
-        if (isOnSearchResults && (
-            plan.toLowerCase().includes('suche') ||
-            plan.toLowerCase().includes('search') ||
-            plan.length < 15
-        )) {
-            console.warn('[PLAN] Plan too vague on search results, forcing product focus');
-            plan = language === 'de'
-                ? 'Produkte anschauen und passendes auswählen'
-                : 'Look at products and select suitable one';
-        }
-
-        console.log(`[PLAN] Generated: "${plan}"`);
+        const plan = await callOllama('mistral:latest', prompt, undefined, language); console.log(`[PLAN] Generated: "${plan}"`);
         return plan.trim();
     } catch (error) {
         console.error('[PLAN] Error:', error);
-
-        // SMART FALLBACK based on context
-        if (isHomepage && !sessionState.searchSubmitted) {
-            return language === 'de' ? 'Suchfeld nutzen' : 'Use search field';
-        } else if (isOnSearchResults) {
-            return language === 'de' ? 'Produkt auswählen' : 'Select product';
-        } else if (isOnProductPage) {
-            return language === 'de' ? 'Produktdetails ansehen' : 'View product details';
-        } else {
-            return language === 'de' ? 'Nächsten Schritt planen' : 'Plan next step';
-        }
+        return "Seite analysieren und Orientierung suchen"; // Fallback
     }
 }

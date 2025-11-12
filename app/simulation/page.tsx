@@ -91,6 +91,7 @@ export default function SimulationPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, task, browserType, clickDepth, domain, personaType }),
+        cache: 'no-store', // <-- DIESE ZEILE HINZUFÜGEN
       });
 
       if (!res.ok || !res.body) {
