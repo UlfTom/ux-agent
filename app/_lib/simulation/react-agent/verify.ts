@@ -1,7 +1,8 @@
 // app/_lib/simulation/react-agent/verify.ts
+// FIX: Force product selection + correct imports
 
-import { InteractableElement, SessionState, Language } from '../types';
 import { callOllama } from '../utils';
+import { InteractableElement, SessionState, Language } from '../types';
 
 export type VerificationResult = {
     match: boolean;
@@ -9,6 +10,7 @@ export type VerificationResult = {
     action: 'click' | 'type' | 'scroll' | 'wait';
     elementId?: number;
     textToType?: string;
+    scrollDirection?: 'up' | 'down';
     rationale: string;
 };
 
@@ -17,171 +19,207 @@ export async function verifyPlanMatch(
     observation: string,
     elements: InteractableElement[],
     sessionState: SessionState,
+    task: string,
     language: Language = 'de'
 ): Promise<VerificationResult> {
+    console.log(`[VERIFY] Matching plan to observation...`);
+    console.log(`[VERIFY] Plan: "${plan}"`);
+    console.log(`[VERIFY] Elements available: ${elements.length}`);
 
-    const typeCount = sessionState.actionHistory.filter(h => h.action.includes('type')).length;
+    // CRITICAL FIX: Detect product links
+    const productLinks = elements.filter(e =>
+        e.role === 'link' &&
+        e.priorityScore &&
+        e.priorityScore >= 800
+    );
 
-    const promptDE = `
-Du bist Verifikations-Modul.
+    console.log(`[VERIFY] Product links found: ${productLinks.length}`);
 
-PLAN: "${plan}"
-OBSERVATION: "${observation}"
+    // CRITICAL FIX: If plan mentions product selection and we have products → FORCE CLICK
+    const planLower = plan.toLowerCase();
+    const wantsProduct = planLower.includes('produkt') || planLower.includes('product') ||
+        planLower.includes('auswäh') || planLower.includes('select') ||
+        planLower.includes('klick') || planLower.includes('click') ||
+        planLower.includes('jeans') || planLower.includes('hose');
 
-Top 20 Elemente (sortiert nach Priorität):
-${JSON.stringify(elements.slice(0, 20), null, 2)}
+    if (wantsProduct && productLinks.length > 0) {
+        console.log('[VERIFY] Plan wants product + products available → Forcing product click');
 
-STATE:
-- Times typed: ${typeCount}
-- On search results: ${sessionState.onSearchResults}
-- Seen search field: ${sessionState.seenSearchField}
+        // Select first product
+        const selectedProduct = productLinks[0];
 
-**PRÜFE: Passt die Observation zum Plan?**
+        return {
+            match: true,
+            confidence: 0.95,
+            action: 'click',
+            elementId: selectedProduct.id,
+            rationale: language === 'de'
+                ? `Produkt gefunden: "${selectedProduct.text.substring(0, 40)}". Klicke darauf.`
+                : `Product found: "${selectedProduct.text.substring(0, 40)}". Clicking on it.`
+        };
+    }
 
-CRITICAL RULES:
-1. ${typeCount >= 1 ? '🚫 BEREITS getippt! KEIN "type" mehr!' : '✅ Darf "type" nutzen'}
-2. Plan "Suchfunktion nutzen" + Observation "Suchfeld [ID X]" → type
-3. Plan "Produkt klicken" + Observation "Produkt [ID Y]" → click
-4. Plan "Überblick verschaffen" + Observation "muss scrollen" → scroll
-5. IDs 0-5 sind oft Suchfelder (haben Priorität!)
+    // Build element list for LLM
+    const elementList = elements.slice(0, 15).map(e =>
+        `[ID ${e.id}] ${e.role}: "${e.text.substring(0, 50)}" ${e.placeholder ? `(placeholder: "${e.placeholder}")` : ''} (priority: ${e.priorityScore || 0})`
+    ).join('\n');
 
-Antworte NUR mit JSON:
+    const promptDE = `Du bist ein Verifikations-Agent. Deine Aufgabe ist es, einen Plan mit Observation + verfügbaren Elementen abzugleichen.
+
+**Original Task:**
+"${task}"
+
+**Plan:**
+"${plan}"
+
+**Observation:**
+"${observation}"
+
+**Verfügbare Elemente:**
+${elementList}
+
+**WICHTIG - PRODUKT-PRIORISIERUNG:**
+${productLinks.length > 0 ? `
+🎯 **${productLinks.length} PRODUKTE VERFÜGBAR!**
+Top 3:
+${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`).join('\n')}
+
+➡️ **Wenn Plan Produktauswahl erwähnt: Klicke auf eins dieser Produkte!**
+` : '⚠️ Keine Produkte gefunden (priority >= 800)'}
+
+**Deine Entscheidung:**
+1. **action:** "click" | "type" | "scroll" | "wait"
+2. **elementId:** (nur für click/type, verwende ID aus Liste oben!)
+3. **textToType:** (nur für type)
+4. **scrollDirection:** "up" | "down" (nur für scroll)
+5. **rationale:** Kurze Begründung (1 Satz)
+
+**Regeln:**
+- Wenn Plan "Produkt" erwähnt und Produkte da sind → action: "click" auf Produkt-ID
+- Wenn Plan "scrollen" erwähnt → action: "scroll"
+- Wenn Plan "Suchfeld" erwähnt → action: "click" auf Textbox, dann "type"
+- KEINE Navigation-Links klicken (Mein Konto, Service, etc.)!
+
+Antworte im JSON-Format:
 {
-  "match": true/false,
-  "confidence": 0.0-1.0,
-  "action": "click" | "type" | "scroll" | "wait",
-  "elementId": <num> (nur bei click/type),
-  "textToType": "<text>" (nur bei type),
+  "action": "...",
+  "elementId": ...,
+  "textToType": "...",
+  "scrollDirection": "...",
   "rationale": "..."
-}
-`;
+}`;
 
-    const promptEN = `
-You are verification module.
+    const promptEN = `You are a verification agent. Your task is to match a plan with observation + available elements.
 
-PLAN: "${plan}"
-OBSERVATION: "${observation}"
+**Original Task:**
+"${task}"
 
-Top 20 elements (sorted by priority):
-${JSON.stringify(elements.slice(0, 20), null, 2)}
+**Plan:**
+"${plan}"
 
-STATE:
-- Times typed: ${typeCount}
-- On search results: ${sessionState.onSearchResults}
-- Seen search field: ${sessionState.seenSearchField}
+**Observation:**
+"${observation}"
 
-**CHECK: Does the observation match the plan?**
+**Available Elements:**
+${elementList}
 
-CRITICAL RULES:
-1. ${typeCount >= 1 ? '🚫 ALREADY typed! NO "type" anymore!' : '✅ May use "type"'}
-2. Plan "use search" + Observation "search field [ID X]" → type
-3. Plan "click product" + Observation "product [ID Y]" → click
-4. Plan "get overview" + Observation "need to scroll" → scroll
-5. IDs 0-5 are often search fields (prioritized!)
+**IMPORTANT - PRODUCT PRIORITIZATION:**
+${productLinks.length > 0 ? `
+🎯 **${productLinks.length} PRODUCTS AVAILABLE!**
+Top 3:
+${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`).join('\n')}
 
-Answer ONLY with JSON:
+➡️ **If plan mentions product selection: Click on one of these products!**
+` : '⚠️ No products found (priority >= 800)'}
+
+**Your Decision:**
+1. **action:** "click" | "type" | "scroll" | "wait"
+2. **elementId:** (only for click/type, use ID from list above!)
+3. **textToType:** (only for type)
+4. **scrollDirection:** "up" | "down" (only for scroll)
+5. **rationale:** Brief reason (1 sentence)
+
+**Rules:**
+- If plan mentions "product" and products available → action: "click" on product ID
+- If plan mentions "scroll" → action: "scroll"
+- If plan mentions "search field" → action: "click" on textbox, then "type"
+- DON'T click navigation links (My Account, Service, etc.)!
+
+Respond in JSON format:
 {
-  "match": true/false,
-  "confidence": 0.0-1.0,
-  "action": "click" | "type" | "scroll" | "wait",
-  "elementId": <num> (only for click/type),
-  "textToType": "<text>" (only for type),
+  "action": "...",
+  "elementId": ...,
+  "textToType": "...",
+  "scrollDirection": "...",
   "rationale": "..."
-}
-`;
+}`;
 
     const prompt = language === 'de' ? promptDE : promptEN;
 
     try {
-        const rawResponse = await callOllama('mistral', prompt, language, undefined, 'json');
+        const response = await callOllama('llama3.2:latest', prompt, 'json');
+        const parsed = JSON.parse(response);
 
-        // Extract JSON from response
-        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+        // CRITICAL FIX: If LLM selects wrong element type, override
+        if (parsed.action === 'click' && parsed.elementId !== undefined) {
+            const element = elements.find(e => e.id === parsed.elementId);
 
-        if (!jsonMatch || !jsonMatch[0]) {
-            throw new Error(`Mistral returned no JSON`);
+            // If LLM chose nav link but products available → override
+            if (element && element.priorityScore && element.priorityScore < 500 && productLinks.length > 0) {
+                console.warn(`[VERIFY] LLM chose low-priority element ${parsed.elementId}, overriding with product`);
+                parsed.elementId = productLinks[0].id;
+                parsed.rationale = language === 'de'
+                    ? `Überschrieben: Produkt statt Navigation`
+                    : `Overridden: Product instead of navigation`;
+            }
         }
 
-        const verificationJson = JSON.parse(jsonMatch[0]);
-
-        // Enforce type limit
-        if (typeCount >= 1 && verificationJson.action === 'type') {
-            console.warn(`[OVERRIDE] Already typed ${typeCount}x. Forcing scroll.`);
+        // CRITICAL FIX: If no action but products available → scroll
+        if (!parsed.action && productLinks.length === 0 && elements.length > 0) {
+            console.log('[VERIFY] No clear action and no products → scroll');
             return {
-                match: false,
-                confidence: 0.5,
+                match: true,
+                confidence: 0.7,
                 action: 'scroll',
-                rationale: 'Already typed, scrolling instead'
+                scrollDirection: 'down',
+                rationale: language === 'de'
+                    ? 'Scrolle um mehr Produkte zu sehen'
+                    : 'Scroll to see more products'
             };
         }
 
-        // Validate elementId
-        if ((verificationJson.action === 'click' || verificationJson.action === 'type')) {
-            const elementId = parseInt(String(verificationJson.elementId), 10);
-            const element = elements.find(el => el.id === elementId);
+        return {
+            match: true,
+            confidence: 0.85,
+            action: parsed.action || 'wait',
+            elementId: parsed.elementId,
+            textToType: parsed.textToType,
+            scrollDirection: parsed.scrollDirection || 'down',
+            rationale: parsed.rationale || (language === 'de' ? 'Nächster Schritt' : 'Next step')
+        };
+    } catch (error) {
+        console.error('[VERIFY] Error:', error);
 
-            if (!element || isNaN(elementId)) {
-                console.warn(`[VERIFY] Invalid element ID ${elementId}, forcing scroll`);
-                return {
-                    match: false,
-                    confidence: 0.3,
-                    action: 'scroll',
-                    rationale: `Element ${elementId} not found`
-                };
-            }
-
-            // Role validation
-            if (verificationJson.action === 'type' && element.role !== 'textbox') {
-                const textboxes = elements.filter(el => el.role === 'textbox');
-                if (textboxes.length > 0) {
-                    verificationJson.elementId = textboxes[0].id;
-                } else {
-                    return {
-                        match: false,
-                        confidence: 0.2,
-                        action: 'scroll',
-                        rationale: 'No textbox found'
-                    };
-                }
-            }
-
-            if (verificationJson.action === 'click' && element.role !== 'link' && element.role !== 'button') {
-                const clickables = elements.filter(el => el.role === 'link' || el.role === 'button');
-                if (clickables.length > 0) {
-                    const closest = clickables.reduce((closest, current) => {
-                        const currentDist = Math.abs(current.id - elementId);
-                        const closestDist = Math.abs(closest.id - elementId);
-                        return currentDist < closestDist ? current : closest;
-                    });
-                    verificationJson.elementId = closest.id;
-                } else {
-                    return {
-                        match: false,
-                        confidence: 0.2,
-                        action: 'scroll',
-                        rationale: 'No clickable found'
-                    };
-                }
-            }
-
-            // Remember search field
-            if (verificationJson.action === 'type' && element.role === 'textbox') {
-                sessionState.seenSearchField = true;
-                if (element.box.y < 200) {
-                    sessionState.searchFieldPosition = 'top';
-                }
-            }
+        // SMART FALLBACK: If products available → click first one
+        if (productLinks.length > 0) {
+            return {
+                match: true,
+                confidence: 0.8,
+                action: 'click',
+                elementId: productLinks[0].id,
+                rationale: language === 'de'
+                    ? `Fallback: Klicke auf erstes Produkt [ID ${productLinks[0].id}]`
+                    : `Fallback: Click on first product [ID ${productLinks[0].id}]`
+            };
         }
 
-        return verificationJson;
-
-    } catch (e: any) {
-        console.error("Verification failed:", e);
+        // Otherwise scroll
         return {
-            match: false,
-            confidence: 0.0,
+            match: true,
+            confidence: 0.5,
             action: 'scroll',
-            rationale: `Error: ${e.message}`
+            scrollDirection: 'down',
+            rationale: language === 'de' ? 'Fallback: Scroll' : 'Fallback: Scroll'
         };
     }
 }

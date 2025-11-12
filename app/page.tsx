@@ -8,6 +8,7 @@ import { HowItWorksSection } from "./_components/landing/HowItWorksSection";
 import { PricingSection } from "./_components/landing/PricingSection";
 import { CTASection } from "./_components/landing/CTASection";
 import { HowTheMagicWorks } from './_components/landing/HowTheMagicWorks';
+import { FAQSection } from './_components/landing/FAQSection';
 
 export default function LandingPage() {
   return (
@@ -20,6 +21,7 @@ export default function LandingPage() {
           <HowTheMagicWorks />
           <HowItWorksSection />
           <PricingSection />
+          <FAQSection />
           <CTASection />
         </main>
       </div>

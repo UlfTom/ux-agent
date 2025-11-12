@@ -32,6 +32,7 @@ Domain-spezifische Insights:
 - SaaS Onboarding-Flows
 - Content Discoverability
 - A/B Testing Automatisierung
+- **Voice-Interview-Modus:** (KI-)Piloten sprechen mit KI-Researchern (Speech AI via ElevenLabs) für qualitative Tiefeninterviews
 
 ### Phase 3: Barrierefreiheit (12 Monate)
 Optionale Simulation menschlicher Einschränkungen:

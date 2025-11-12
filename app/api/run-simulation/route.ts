@@ -1,4 +1,5 @@
 // app/api/run-simulation/route.ts
+// FIXED: Scroll tracking + Always draw bounding boxes
 
 import { NextRequest } from 'next/server';
 import { launchBrowser, updateSessionState, checkAndDismissCookie } from '@/app/_lib/simulation/browser';
@@ -6,10 +7,10 @@ import { getInteractableElements } from '@/app/_lib/simulation/elements';
 import { annotateImage } from '@/app/_lib/simulation/vision';
 import { generatePersona } from '@/app/_lib/simulation/persona';
 import { getPlan } from '@/app/_lib/simulation/react-agent/plan';
-import { observeScreen } from '@/app/_lib/simulation/react-agent/observe';
+import { observeCurrentState } from '@/app/_lib/simulation/react-agent/observe';
 import { verifyPlanMatch } from '@/app/_lib/simulation/react-agent/verify';
 import { executeAction } from '@/app/_lib/simulation/react-agent/execute';
-import { reflect } from '@/app/_lib/simulation/react-agent/reflect';
+import { reflectOnProgress } from '@/app/_lib/simulation/react-agent/reflect';
 import { sendSSE, stripAnsiCodes } from '@/app/_lib/simulation/utils';
 import { LogStep, SessionState, Language, PersonaType } from '@/app/_lib/simulation/types';
 
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
             const structuredLog: LogStep[] = [];
             let browser = null;
 
+            // CRITICAL FIX: Initialize with scroll tracking
             const sessionState: SessionState = {
                 searchText: null,
                 searchSubmitted: false,
@@ -47,7 +49,9 @@ export async function POST(request: NextRequest) {
                 lastAction: '',
                 actionHistory: [],
                 seenSearchField: false,
-                searchFieldPosition: 'unknown'
+                searchFieldPosition: 'unknown',
+                scrollCount: 0,
+                consecutiveScrolls: 0
             };
 
             try {
@@ -131,7 +135,6 @@ export async function POST(request: NextRequest) {
                     const stepLogs: string[] = [];
 
                     console.log(`\n[STEP ${i + 1}/${totalSteps}] ReAct Loop Starting...`);
-
                     sendSSE(controller, { type: 'progress', value: progress, status: stepName });
 
                     await checkAndDismissCookie(page, stepLogs);
@@ -162,7 +165,6 @@ export async function POST(request: NextRequest) {
                         }
 
                         updateSessionState(page, sessionState);
-
                         const loopStep: LogStep = {
                             step: stepName + " (Loop Break)",
                             logs: stepLogs,
@@ -182,29 +184,61 @@ export async function POST(request: NextRequest) {
                     try {
                         plan = await getPlan(task, personaPrompt, personaType, sessionState, page.url(), lang);
                         console.log(`[STEP ${i + 1}] Plan: "${plan}"`);
-                        stepLogs.push(`   💭 Plan: "${plan}"`);
+                        stepLogs.push(` 💭 Plan: "${plan}"`);
                     } catch (error) {
-                        stepLogs.push(`   ❌ Plan Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        stepLogs.push(` ❌ Plan Error: ${error instanceof Error ? error.message : 'Unknown'}`);
                         console.error(`[STEP ${i + 1}] Plan error:`, error);
                         break;
                     }
 
-                    // 2️⃣ OBSERVE
+                    // 2️⃣ OBSERVE - FIXED: Better timing + Always annotate
                     stepLogs.push(`👁️ Phase 2: Observing...`);
                     console.log(`[STEP ${i + 1}] Getting observation...`);
 
-                    const screenshotBuffer = await page.screenshot({ type: 'png' });
-                    const elements = await getInteractableElements(page);
+                    // CRITICAL FIX: Wait longer for page to settle
+                    await page.waitForTimeout(1200);
 
+                    // CRITICAL FIX: Wait for network to be idle
+                    try {
+                        await page.waitForLoadState('networkidle', { timeout: 3000 });
+                        console.log('[OBSERVE] Network idle');
+                    } catch {
+                        console.warn('[OBSERVE] Network not idle, continuing anyway');
+                    }
+
+                    // Get screenshot
+                    const screenshotBuffer = await page.screenshot({ type: 'png' });
+
+                    // Get elements
+                    const elements = await getInteractableElements(page);
+                    console.log(`[STEP ${i + 1}] Found ${elements.length} elements`);
+
+                    // CRITICAL FIX: ALWAYS create annotation, even with 0 elements!
+                    const annotated = await annotateImage(screenshotBuffer, elements);
+
+                    // Handle no elements case
                     if (elements.length === 0) {
-                        stepLogs.push(`   ⚠️ Keine Elemente. Scrolle...`);
+                        stepLogs.push(` ⚠️ Keine Elemente gefunden!`);
+
+                        // DEBUG: Check raw HTML
+                        const htmlCheck = await page.evaluate(() => {
+                            const buttons = document.querySelectorAll('button').length;
+                            const links = document.querySelectorAll('a').length;
+                            const inputs = document.querySelectorAll('input').length;
+                            return { buttons, links, inputs };
+                        });
+
+                        console.log(`[STEP ${i + 1}] HTML check:`, htmlCheck);
+                        stepLogs.push(` 🔍 HTML: ${htmlCheck.buttons} buttons, ${htmlCheck.links} links, ${htmlCheck.inputs} inputs`);
+
+                        // Scroll and try again
                         await page.mouse.wheel(0, 500);
-                        await page.waitForTimeout(500);
+                        await page.waitForTimeout(800);
 
                         const scrollStep: LogStep = {
                             step: stepName + " (No Elements)",
                             logs: stepLogs,
-                            image: screenshotBuffer.toString('base64'),
+                            image: annotated, // ← IMPORTANT: Save screenshot with annotation!
                             timestamp: Date.now()
                         };
                         structuredLog.push(scrollStep);
@@ -212,16 +246,19 @@ export async function POST(request: NextRequest) {
                         continue;
                     }
 
-                    stepLogs.push(`   📊 Gefunden: ${elements.length} Elemente (Top 5: ${elements.slice(0, 5).map(e => `[${e.id}:${e.role}]`).join(', ')})`);
-                    const annotated = await annotateImage(screenshotBuffer, elements);
+                    // Log elements found
+                    stepLogs.push(` 📊 Gefunden: ${elements.length} Elemente`);
+                    stepLogs.push(` 🎯 Top 5: ${elements.slice(0, 5).map(e => `[${e.id}:${e.role}:${e.text?.substring(0, 20) || 'no-text'}]`).join(', ')}`);
 
+                    // Continue with observe
                     let observation: string;
                     try {
-                        observation = await observeScreen(plan, annotated, elements, page.url(), lang);
+                        const screenshotBase64 = annotated; // Already base64
+                        observation = await observeCurrentState(page, plan, elements, screenshotBase64, lang);
                         console.log(`[STEP ${i + 1}] Observation: "${observation}"`);
-                        stepLogs.push(`   👀 Observation: "${observation}"`);
+                        stepLogs.push(` 👀 Observation: "${observation}"`);
                     } catch (error) {
-                        stepLogs.push(`   ❌ Observation Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        stepLogs.push(` ❌ Observation Error: ${error instanceof Error ? error.message : 'Unknown'}`);
                         console.error(`[STEP ${i + 1}] Observation error:`, error);
                         break;
                     }
@@ -232,13 +269,21 @@ export async function POST(request: NextRequest) {
 
                     let verification: any;
                     try {
-                        verification = await verifyPlanMatch(plan, observation, elements, sessionState, lang);
+                        verification = await verifyPlanMatch(plan, observation, elements, sessionState, task, lang);
                         console.log(`[STEP ${i + 1}] Verification:`, verification);
-                        stepLogs.push(`   🔍 Match: ${verification.match} (${Math.round(verification.confidence * 100)}%)`);
-                        stepLogs.push(`   🎬 Action: ${verification.action}${verification.elementId !== undefined ? ` [ID ${verification.elementId}]` : ''}`);
-                        stepLogs.push(`   📝 Rationale: "${verification.rationale}"`);
+
+                        stepLogs.push(` 🔍 Match: ${verification.match} (${Math.round(verification.confidence * 100)}%)`);
+                        stepLogs.push(` 🎬 Action: ${verification.action}${verification.elementId !== undefined ? ` [ID ${verification.elementId}]` : ''}`);
+
+                        if (verification.scrollDirection) {
+                            stepLogs.push(` ↕️ Direction: ${verification.scrollDirection}`);
+                        }
+                        if (verification.textToType) {
+                            stepLogs.push(` 📝 Text: "${verification.textToType}"`);
+                        }
+                        stepLogs.push(` 📝 Rationale: "${verification.rationale}"`);
                     } catch (error) {
-                        stepLogs.push(`   ❌ Verification Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        stepLogs.push(` ❌ Verification Error: ${error instanceof Error ? error.message : 'Unknown'}`);
                         console.error(`[STEP ${i + 1}] Verification error:`, error);
                         break;
                     }
@@ -249,12 +294,30 @@ export async function POST(request: NextRequest) {
 
                     let result = '';
                     try {
-                        result = await executeAction(page, verification, elements, sessionState, stepLogs);
+                        result = await executeAction(verification, page, elements, task);
+                        stepLogs.push(` ✅ ${result}`);
                     } catch (error) {
                         result = `Fehler: ${error instanceof Error ? error.message : 'Unknown'}`;
-                        stepLogs.push(`   ❌ ${result}`);
+                        stepLogs.push(` ❌ ${result}`);
                         console.error(`[STEP ${i + 1}] Execution error:`, error);
                     }
+
+                    // CRITICAL FIX: Track scroll count
+                    if (verification.action === 'scroll') {
+                        sessionState.scrollCount = (sessionState.scrollCount || 0) + 1;
+                        sessionState.consecutiveScrolls = (sessionState.consecutiveScrolls || 0) + 1;
+                        console.log(`[ROUTE] Scroll count: ${sessionState.scrollCount}`);
+                        stepLogs.push(` 📊 Scroll count: ${sessionState.scrollCount}`);
+                    } else {
+                        // Reset consecutive scrolls on non-scroll action
+                        sessionState.consecutiveScrolls = 0;
+                    }
+
+                    // CRITICAL FIX: Wait after execution for page to settle
+                    await page.waitForTimeout(800);
+
+                    // CRITICAL FIX: Update session state after action
+                    updateSessionState(page, sessionState);
 
                     // 5️⃣ REFLECT
                     stepLogs.push(`🔄 Phase 5: Reflecting...`);
@@ -262,12 +325,12 @@ export async function POST(request: NextRequest) {
 
                     let reflection: string;
                     try {
-                        reflection = await reflect(plan, verification.action, result, page.url(), sessionState, lang);
+                        reflection = await reflectOnProgress(plan, observation, result, sessionState, task, i + 1, lang);
                         console.log(`[STEP ${i + 1}] Reflection: "${reflection}"`);
-                        stepLogs.push(`   💡 Reflection: "${reflection}"`);
+                        stepLogs.push(` 💡 Reflection: "${reflection}"`);
                     } catch (error) {
                         reflection = "Weiter";
-                        stepLogs.push(`   ⚠️ Reflection Error, continuing...`);
+                        stepLogs.push(` ⚠️ Reflection Error, continuing...`);
                     }
 
                     // Save to history
@@ -278,18 +341,17 @@ export async function POST(request: NextRequest) {
                         reflection
                     });
 
-                    // Create step log
+                    // Create step log with annotated image
                     const currentStep: LogStep = {
                         step: stepName,
                         logs: stepLogs,
-                        image: annotated,
+                        image: annotated, // ← CRITICAL: Use annotated image with bounding boxes!
                         timestamp: Date.now(),
                         plan,
                         observation,
                         verification,
                         reflection
                     };
-
                     structuredLog.push(currentStep);
                     sendSSE(controller, { type: 'step', step: currentStep });
 
@@ -299,9 +361,17 @@ export async function POST(request: NextRequest) {
                         console.log(`[STEP ${i + 1}] Agent finished task`);
                         break;
                     }
+
                     if (reflection.toLowerCase().includes('task') && reflection.toLowerCase().includes('completed')) {
                         stepLogs.push(`✅ Agent reports: Task completed!`);
                         console.log(`[STEP ${i + 1}] Agent finished task`);
+                        break;
+                    }
+
+                    // Check if too many scrolls (stop condition)
+                    if (sessionState.scrollCount && sessionState.scrollCount >= 5) {
+                        stepLogs.push(`🛑 STOP: Too many scrolls (${sessionState.scrollCount}), ending simulation`);
+                        console.log(`[STEP ${i + 1}] Stopped due to excessive scrolling`);
                         break;
                     }
                 }

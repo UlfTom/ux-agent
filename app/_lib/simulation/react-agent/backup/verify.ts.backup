@@ -1,0 +1,246 @@
+// app/_lib/simulation/react-agent/verify.ts
+
+import { InteractableElement, SessionState, Language } from '../types';
+import { callOllama } from '../utils';
+
+export type VerificationResult = {
+    match: boolean;
+    confidence: number;
+    action: 'click' | 'type' | 'scroll' | 'wait';
+    elementId?: number;
+    textToType?: string;
+    rationale: string;
+};
+
+export async function verifyPlanMatch(
+    plan: string,
+    observation: string,
+    elements: InteractableElement[],
+    sessionState: SessionState,
+    language: Language = 'de'
+): Promise<VerificationResult> {
+
+    const typeCount = sessionState.actionHistory.filter(h => h.action.includes('type')).length;
+    const scrollCount = sessionState.actionHistory.filter(h => h.action.includes('scroll')).length;
+
+    // SPECIAL CASE: If plan wants search but very few elements found
+    if (plan.toLowerCase().includes('such') &&
+        elements.length < 10 &&
+        !sessionState.seenSearchField &&
+        scrollCount < 2) {
+        console.warn(`[VERIFY] Plan wants search but only ${elements.length} elements. Scroll up suggested.`);
+        return {
+            match: false,
+            confidence: 0.7,
+            action: 'scroll',
+            rationale: `Few elements (${elements.length}), scrolling to find more`
+        };
+    }
+
+    const promptDE = `Du bist Verifikations-Modul.
+
+PLAN: "${plan}"
+OBSERVATION: "${observation}"
+
+Top 20 Elemente (sortiert nach Priorität):
+${JSON.stringify(elements.slice(0, 20), null, 2)}
+
+STATE:
+- Times typed: ${typeCount}
+- Times scrolled: ${scrollCount}
+- On search results: ${sessionState.onSearchResults}
+- Seen search field: ${sessionState.seenSearchField}
+- Search field position: ${sessionState.searchFieldPosition}
+
+**PRÜFE: Passt die Observation zum Plan?**
+
+CRITICAL RULES:
+1. ${typeCount >= 1 ? '🚫 BEREITS getippt! KEIN "type" mehr!' : '✅ Darf "type" nutzen'}
+2. Plan "Suchfunktion nutzen" + Observation "Suchfeld [ID X]" → type
+3. Plan "Produkt klicken" + Observation "Produkt [ID Y]" → click
+4. Plan "Überblick verschaffen" + Observation "muss scrollen" → scroll
+5. IDs 0-10 sind oft Suchfelder/Buttons (haben Priorität!)
+6. ${scrollCount >= 3 ? '⚠️ Schon 3x gescrollt! Versuche CLICK oder TYPE statt scroll.' : ''}
+7. ${sessionState.seenSearchField ? '💡 Suchfeld wurde schon gesehen!' : ''}
+
+Antworte NUR mit JSON:
+{
+  "match": true/false,
+  "confidence": 0.0-1.0,
+  "action": "click" | "type" | "scroll" | "wait",
+  "elementId": <num> (nur bei click/type),
+  "textToType": "<text>" (nur bei type),
+  "rationale": "..."
+}`;
+
+    const promptEN = `You are verification module.
+
+PLAN: "${plan}"
+OBSERVATION: "${observation}"
+
+Top 20 elements (sorted by priority):
+${JSON.stringify(elements.slice(0, 20), null, 2)}
+
+STATE:
+- Times typed: ${typeCount}
+- Times scrolled: ${scrollCount}
+- On search results: ${sessionState.onSearchResults}
+- Seen search field: ${sessionState.seenSearchField}
+- Search field position: ${sessionState.searchFieldPosition}
+
+**CHECK: Does the observation match the plan?**
+
+CRITICAL RULES:
+1. ${typeCount >= 1 ? '🚫 ALREADY typed! NO "type" anymore!' : '✅ May use "type"'}
+2. Plan "use search" + Observation "search field [ID X]" → type
+3. Plan "click product" + Observation "product [ID Y]" → click
+4. Plan "get overview" + Observation "need to scroll" → scroll
+5. IDs 0-10 are often search fields/buttons (prioritized!)
+6. ${scrollCount >= 3 ? '⚠️ Already scrolled 3x! Try CLICK or TYPE instead of scroll.' : ''}
+7. ${sessionState.seenSearchField ? '💡 Search field was already seen!' : ''}
+
+Answer ONLY with JSON:
+{
+  "match": true/false,
+  "confidence": 0.0-1.0,
+  "action": "click" | "type" | "scroll" | "wait",
+  "elementId": <num> (only for click/type),
+  "textToType": "<text>" (only for type),
+  "rationale": "..."
+}`;
+
+    const prompt = language === 'de' ? promptDE : promptEN;
+
+    try {
+        const rawResponse = await callOllama('mistral', prompt, language, undefined, 'json');
+
+        // Extract JSON from response
+        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+
+        if (!jsonMatch || !jsonMatch[0]) {
+            throw new Error(`Mistral returned no JSON`);
+        }
+
+        const verificationJson = JSON.parse(jsonMatch[0]);
+
+        // Enforce type limit
+        if (typeCount >= 1 && verificationJson.action === 'type') {
+            console.warn(`[OVERRIDE] Already typed ${typeCount}x. Forcing scroll or click.`);
+
+            // Try to click a link instead
+            const links = elements.filter(e => e.role === 'link');
+            if (links.length > 0) {
+                return {
+                    match: true,
+                    confidence: 0.6,
+                    action: 'click',
+                    elementId: links[0].id,
+                    rationale: 'Already typed, clicking link instead'
+                };
+            }
+
+            return {
+                match: false,
+                confidence: 0.5,
+                action: 'scroll',
+                rationale: 'Already typed, scrolling instead'
+            };
+        }
+
+        // Discourage excessive scrolling
+        if (scrollCount >= 4 && verificationJson.action === 'scroll') {
+            console.warn(`[OVERRIDE] Already scrolled ${scrollCount}x. Forcing click or wait.`);
+
+            const clickables = elements.filter(e => e.role === 'button' || e.role === 'link');
+            if (clickables.length > 0) {
+                return {
+                    match: true,
+                    confidence: 0.5,
+                    action: 'click',
+                    elementId: clickables[0].id,
+                    rationale: 'Too much scrolling, clicking instead'
+                };
+            }
+
+            return {
+                match: false,
+                confidence: 0.3,
+                action: 'wait',
+                rationale: 'Too much scrolling, waiting'
+            };
+        }
+
+        // Validate elementId
+        if ((verificationJson.action === 'click' || verificationJson.action === 'type')) {
+            const elementId = parseInt(String(verificationJson.elementId), 10);
+            const element = elements.find(el => el.id === elementId);
+
+            if (!element || isNaN(elementId)) {
+                console.warn(`[VERIFY] Invalid element ID ${elementId}, forcing scroll`);
+                return {
+                    match: false,
+                    confidence: 0.3,
+                    action: 'scroll',
+                    rationale: `Element ${elementId} not found`
+                };
+            }
+
+            // Role validation for TYPE
+            if (verificationJson.action === 'type' && element.role !== 'textbox') {
+                const textboxes = elements.filter(el => el.role === 'textbox');
+                if (textboxes.length > 0) {
+                    console.log(`[VERIFY] Element ${elementId} is not textbox, using ${textboxes[0].id} instead`);
+                    verificationJson.elementId = textboxes[0].id;
+                } else {
+                    return {
+                        match: false,
+                        confidence: 0.2,
+                        action: 'scroll',
+                        rationale: 'No textbox found'
+                    };
+                }
+            }
+
+            // Role validation for CLICK
+            if (verificationJson.action === 'click' && element.role !== 'link' && element.role !== 'button') {
+                const clickables = elements.filter(el => el.role === 'link' || el.role === 'button');
+                if (clickables.length > 0) {
+                    const closest = clickables.reduce((closest, current) => {
+                        const currentDist = Math.abs(current.id - elementId);
+                        const closestDist = Math.abs(closest.id - elementId);
+                        return currentDist < closestDist ? current : closest;
+                    });
+                    console.log(`[VERIFY] Element ${elementId} not clickable, using ${closest.id} instead`);
+                    verificationJson.elementId = closest.id;
+                } else {
+                    return {
+                        match: false,
+                        confidence: 0.2,
+                        action: 'scroll',
+                        rationale: 'No clickable found'
+                    };
+                }
+            }
+
+            // Remember search field
+            if (verificationJson.action === 'type' && element.role === 'textbox') {
+                sessionState.seenSearchField = true;
+                if (element.box.y < 200) {
+                    sessionState.searchFieldPosition = 'top';
+                    console.log(`[VERIFY] 💾 Remembered: Search field is at TOP`);
+                }
+            }
+        }
+
+        return verificationJson;
+
+    } catch (e: any) {
+        console.error("Verification failed:", e);
+        return {
+            match: false,
+            confidence: 0.0,
+            action: 'scroll',
+            rationale: `Error: ${e.message}`
+        };
+    }
+}

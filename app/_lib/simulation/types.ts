@@ -1,4 +1,5 @@
 // app/_lib/simulation/types.ts
+// FIX: Add scrollCount to SessionState
 
 export type LogStep = {
     step: string;
@@ -37,8 +38,15 @@ export type SessionState = {
     }>;
     seenSearchField: boolean;
     searchFieldPosition: 'top' | 'unknown';
+
+    // CRITICAL FIX: Add scroll tracking
+    scrollCount?: number;
+    consecutiveScrolls?: number;
 };
 
 export type Language = 'de' | 'en';
 
-export type PersonaType = 'Pragmatisch & Zielorientiert' | 'Explorativ & Neugierig' | 'Vorsichtig & Skeptisch';
+export type PersonaType =
+    | 'Pragmatisch & Zielorientiert'
+    | 'Explorativ & Neugierig'
+    | 'Vorsichtig & Skeptisch';

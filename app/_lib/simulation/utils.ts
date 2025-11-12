@@ -8,7 +8,6 @@ export async function retryAsync<T>(
     delayMs: number = 500
 ): Promise<T> {
     let lastError: any;
-
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             return await fn();
@@ -19,25 +18,32 @@ export async function retryAsync<T>(
             }
         }
     }
-
     throw lastError;
 }
 
+// ERWEITERT: Unterstützt jetzt auch Model-Varianten mit :latest
 export async function callOllama(
-    model: 'mistral' | 'llava',
+    model: 'mistral' | 'llava' | 'llama3.2:latest' | 'llava:latest',
     prompt: string,
+    imageBase64?: string, // GEÄNDERT: Einfacher Parameter
     language: Language = 'de',
-    images?: string[],
     format?: 'json'
 ): Promise<string> {
     return await retryAsync(async () => {
+        // Normalize model name (remove :latest suffix for API)
+        const baseModel = model.includes('llama') ? 'llama3.2' : model.replace(':latest', '');
+
         const body: any = {
-            model,
+            model: baseModel,
             prompt,
             stream: false,
         };
 
-        if (images) body.images = images;
+        // GEÄNDERT: Bild als einzelner string statt array
+        if (imageBase64) {
+            body.images = [imageBase64];
+        }
+
         if (format) body.format = format;
 
         const response = await fetch('http://localhost:11434/api/generate', {

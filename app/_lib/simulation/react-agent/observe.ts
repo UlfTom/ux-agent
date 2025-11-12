@@ -1,100 +1,162 @@
 // app/_lib/simulation/react-agent/observe.ts
+// FIX: Vision-based product detection + Code-based fallback
 
-import { InteractableElement, Language } from '../types';
+import { Page } from 'playwright';
 import { callOllama } from '../utils';
+import { InteractableElement } from '../types';
+import { Language } from '../types';
 
-function getSearchFieldHints(language: Language): string {
-    return language === 'de'
-        ? `
-⚠️ WICHTIG: Achte besonders auf:
-- 🔍 **Suchfelder** (meist GANZ OBEN, oft mit Lupe-Icon)
-  → Haben oft KLEINE IDs (0-5) da priorisiert!
-- 🔘 Große Buttons (CTAs, "Jetzt kaufen", "Zur Kasse")
-- 📝 Eingabefelder (Login, Formulare)
-- 🖼️ Produktbilder & Links
-
-Textboxen haben Priorität und bekommen niedrige IDs!
-`
-        : `
-⚠️ IMPORTANT: Pay special attention to:
-- 🔍 **Search fields** (usually AT THE TOP, often with magnifier icon)
-  → Often have LOW IDs (0-5) because prioritized!
-- 🔘 Large buttons (CTAs, "Buy now", "Checkout")
-- 📝 Input fields (Login, forms)
-- 🖼️ Product images & links
-
-Textboxes are prioritized and get low IDs!
-`;
-}
-
-export async function observeScreen(
+export async function observeCurrentState(
+    page: Page,
     plan: string,
-    annotatedScreenshotBase64: string,
     elements: InteractableElement[],
-    currentUrl: string,
+    screenshotBase64: string,
     language: Language = 'de'
 ): Promise<string> {
+    console.log(`[OBSERVE] Analyzing state...`);
+    console.log(`[OBSERVE] Plan: "${plan}"`);
+    console.log(`[OBSERVE] Elements found: ${elements.length}`);
 
-    const searchFieldHints = getSearchFieldHints(language);
+    // Get current URL for context
+    const currentUrl = page.url();
+    console.log(`[OBSERVE] Current URL: ${currentUrl}`);
 
-    const promptDE = `
-Du bist ein User Agent.
+    // CRITICAL FIX: Detect context
+    const isOnSearchResults = currentUrl.includes('/suche/') || currentUrl.includes('/search/');
 
-DEIN PLAN: "${plan}"
-AKTUELLE URL: ${currentUrl}
+    // CRITICAL FIX: Count product links (HIGH priority >= 800)
+    const productLinks = elements.filter(e =>
+        e.role === 'link' &&
+        e.priorityScore &&
+        e.priorityScore >= 800
+    );
 
-${searchFieldHints}
+    console.log(`[OBSERVE] Is on search results: ${isOnSearchResults}`);
+    console.log(`[OBSERVE] Product links found: ${productLinks.length}`);
 
-Schau das Bild an. Rote Boxen mit IDs sind interaktive Elemente.
+    // Build element summary (Top 10 products + 5 other)
+    const topProducts = elements.filter(e => e.priorityScore && e.priorityScore >= 800).slice(0, 10);
+    const otherElements = elements.filter(e => !e.priorityScore || e.priorityScore < 800).slice(0, 5);
+    const relevantElements = [...topProducts, ...otherElements];
 
-**Was SIEHST du, das zu deinem Plan passt?**
+    const elementSummary = relevantElements.map(e =>
+        `[ID ${e.id}] ${e.role}: "${e.text.substring(0, 60)}" (priority: ${e.priorityScore || 0})`
+    ).join('\n');
 
-Beschreibe präzise:
-- Welches Element siehst du? (mit [ID])
-- Wo ist es? (oben, Mitte, unten)
-- Passt es zu deinem Plan?
+    // CRITICAL FIX: Add product context
+    const productContext = productLinks.length > 0 ? `
+🛍️ **PRODUKTE GEFUNDEN!**
+Anzahl: ${productLinks.length}
+Top 3:
+${productLinks.slice(0, 3).map((p, i) => `${i + 1}. [ID ${p.id}] "${p.text.substring(0, 50)}"`).join('\n')}
+` : `⚠️ **KEINE PRODUKTE** im Code gefunden (priority >= 800)`;
 
-Beispiele:
-- "Ich sehe ein Suchfeld [ID 2] ganz oben rechts mit Lupe-Icon"
-- "Ich sehe Produktbilder [ID 12, 15, 18] in der Mitte"
-- "Ich sehe einen Login-Button [ID 7] oben"
-- "Ich sehe viele Produkte, muss scrollen für mehr"
+    const promptDE = `Du bist ein KI-Shopping-Agent der Produkte auswählen soll.
 
-Antworte JETZT in 1-2 kurzen Sätzen:
-`;
+**Dein Plan:**
+"${plan}"
 
-    const promptEN = `
-You are a user agent.
+**Verfügbare Elemente (Top ${relevantElements.length}):**
+${elementSummary}
 
-YOUR PLAN: "${plan}"
-CURRENT URL: ${currentUrl}
+${productContext}
 
-${searchFieldHints}
+**WICHTIGE ANWEISUNGEN:**
 
-Look at the image. Red boxes with IDs are interactive elements.
+1. **VISUELL PRÜFEN:** Schaue dir den Screenshot an:
+   - Siehst du Produkt-Kacheln mit Bildern?
+   - Siehst du Produktnamen und Preise (€)?
+   - Wie viele Produkte sind sichtbar?
 
-**What do you SEE that matches your plan?**
+2. **PRODUKTE BESCHREIBEN:**
+   - Wenn du Produkte siehst: "Ich sehe [Anzahl] Produkte: [Namen]"
+   - Nenne konkrete Produktnamen die du SIEHST
+   - Erwähne Preise wenn sichtbar
 
-Describe precisely:
-- Which element do you see? (with [ID])
-- Where is it? (top, middle, bottom)
-- Does it match your plan?
+3. **AUSWAHL TREFFEN:**
+   - Wenn mehrere Produkte da sind: Sage welches dir am besten gefällt und WARUM
+   - "Die [Farbe] [Produkt] mit [Feature] gefällt mir weil [Grund]"
+   - Gib die Element-ID an: [ID X]
 
-Examples:
-- "I see a search field [ID 2] at the very top right with magnifier icon"
-- "I see product images [ID 12, 15, 18] in the middle"
-- "I see a login button [ID 7] at the top"
-- "I see many products, need to scroll for more"
+4. **KEINE HALLUZINATION:**
+   - Erfinde KEINE Element-IDs
+   - Sage nicht "Produkte da" wenn du keine siehst
+   - Sage klar wenn NICHTS passt
 
-Answer NOW in 1-2 short sentences:
-`;
+Beschreibe was du siehst (2-4 Sätze, inkl. Produktauswahl wenn möglich):`;
+
+    const promptEN = `You are an AI shopping agent who needs to select products.
+
+**Your Plan:**
+"${plan}"
+
+**Available Elements (Top ${relevantElements.length}):**
+${elementSummary}
+
+${productContext}
+
+**IMPORTANT INSTRUCTIONS:**
+
+1. **VISUAL CHECK:** Look at the screenshot:
+   - Do you see product tiles with images?
+   - Do you see product names and prices (€)?
+   - How many products are visible?
+
+2. **DESCRIBE PRODUCTS:**
+   - If you see products: "I see [number] products: [names]"
+   - Name specific products you SEE
+   - Mention prices if visible
+
+3. **MAKE SELECTION:**
+   - If multiple products: Say which one you like best and WHY
+   - "The [color] [product] with [feature] appeals to me because [reason]"
+   - Provide element ID: [ID X]
+
+4. **NO HALLUCINATION:**
+   - Don't invent element IDs
+   - Don't say "products there" if you see none
+   - Clearly state if NOTHING fits
+
+Describe what you see (2-4 sentences, incl. product selection if possible):`;
 
     const prompt = language === 'de' ? promptDE : promptEN;
 
     try {
-        return await callOllama('llava', prompt, language, [annotatedScreenshotBase64]);
-    } catch (e: any) {
-        console.error("Observation failed:", e);
-        throw new Error(`Llava not reachable: ${e.message}`);
+        const observation = await callOllama('llava', prompt, 'text');
+
+        console.log(`[OBSERVE] ✅ Vision observation: ${observation.substring(0, 200)}...`);
+
+        // CRITICAL FIX: Enrich with code-based data
+        let enrichedObservation = observation;
+
+        if (productLinks.length > 0) {
+            enrichedObservation += `\n\n💻 **Code-Analyse:** ${productLinks.length} klickbare Produkt-Links gefunden.`;
+            enrichedObservation += `\n🎯 **Verfügbar:** ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 30)}"`).join(', ')}`;
+        }
+
+        return enrichedObservation;
+    } catch (error) {
+        console.error('[OBSERVE] Vision error:', error);
+
+        // FALLBACK: Code-based observation (language-aware)
+        if (productLinks.length > 0) {
+            if (language === 'de') {
+                return `✅ Ich sehe die Suchergebnisseite mit ${productLinks.length} Produkten. Verfügbar: ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`).join(', ')}. Diese Produkte kann ich anklicken.`;
+            } else {
+                return `✅ I see the search results page with ${productLinks.length} products. Available: ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`).join(', ')}. I can click these products.`;
+            }
+        } else if (isOnSearchResults) {
+            if (language === 'de') {
+                return `⚠️ Ich sehe die Suchergebnisseite, aber der Code findet keine Produkte (priority >= 800). Möglicherweise muss ich scrollen oder die Seite ist noch am Laden.`;
+            } else {
+                return `⚠️ I see the search results page, but the code finds no products (priority >= 800). May need to scroll or page is still loading.`;
+            }
+        } else {
+            if (language === 'de') {
+                return `📄 Ich sehe die Seite mit ${elements.length} interaktiven Elementen. Keine Produkte erkannt.`;
+            } else {
+                return `📄 I see the page with ${elements.length} interactive elements. No products detected.`;
+            }
+        }
     }
 }
