@@ -77,6 +77,7 @@ export default function SimulationPage() {
   const [domain, setDomain] = useState('ecommerce');
   const [personaType, setPersonaType] = useState('pragmatic');
   const [activeTab, setActiveTab] = useState('all');
+  const [debugMode, setDebugMode] = useState(true); // ⭐️ NEU: Debug-State
 
   const handleStartSimulation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +91,7 @@ export default function SimulationPage() {
       const res = await fetch('/api/run-simulation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, task, browserType, clickDepth, domain, personaType }),
+        body: JSON.stringify({ url, task, browserType, clickDepth, domain, personaType, debugMode }),
         cache: 'no-store', // <-- DIESE ZEILE HINZUFÜGEN
       });
 
@@ -315,6 +316,23 @@ export default function SimulationPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">Currently locked</p>
+                    </div>
+
+                    {/* ⭐️ KORRIGIERT: Debug-Modus mit Standard-HTML ⭐️ */}
+                    <div className="flex items-center space-x-2 pt-4">
+                      <input
+                        type="checkbox"
+                        id="debugMode"
+                        checked={debugMode}
+                        onChange={(e) => setDebugMode(e.target.checked)} // ✅ KORREKT
+                        className="h-4 w-4"
+                      />
+                      <label
+                        htmlFor="debugMode"
+                        className="text-sm font-medium leading-none"
+                      >
+                        Debug-Modus (Screenshots & Bounding Boxes anzeigen)
+                      </label>
                     </div>
 
                     {/* Submit Button with Progress & Timer */}
@@ -779,7 +797,7 @@ function TimelineStepCard({
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="mt-3 border rounded-lg overflow-hidden"
+                  className="mt-3 border-2 rounded-lg overflow-hidden"
                 >
                   <img
                     src={`data:image/png;base64,${step.image}`}

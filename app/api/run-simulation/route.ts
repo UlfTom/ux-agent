@@ -1,24 +1,25 @@
 // app/api/run-simulation/route.ts
-// KORRIGIERTE STREAMING-VERSION
+// ⭐️ KORRIGIERTE VERSION (FIX FÜR ALLE TYPESCRIPT-FEHLER) ⭐️
 
 import { NextRequest } from 'next/server';
 import { launchBrowser, updateSessionState, checkAndDismissCookie } from '@/app/_lib/simulation/browser';
 import { getInteractableElements } from '@/app/_lib/simulation/elements';
 import { annotateImage } from '@/app/_lib/simulation/vision';
-import { generatePersona } from '@/app/_lib/simulation/persona';
+// import { generatePersona } from '@/app/_lib/simulation/persona'; // NICHT MEHR LIVE GENERIEREN
+import { pragmaticPersonaDE } from '@/app/_lib/simulation/persona-cache'; // ⭐️ NEU: Persona-Pool
 import { getPlan } from '@/app/_lib/simulation/react-agent/plan';
 import { observeCurrentState } from '@/app/_lib/simulation/react-agent/observe';
 import { verifyPlanMatch } from '@/app/_lib/simulation/react-agent/verify';
 import { executeAction } from '@/app/_lib/simulation/react-agent/execute';
 import { reflectOnProgress } from '@/app/_lib/simulation/react-agent/reflect';
 import { sendSSE, stripAnsiCodes } from '@/app/_lib/simulation/utils';
-import { LogStep, SessionState, Language, PersonaType } from '@/app/_lib/simulation/types';
+import { LogStep, SessionState, Language, PersonaType, InteractableElement } from '@/app/_lib/simulation/types';
 
-// WICHTIG: Stellt sicher, dass Next.js diese Route nicht statisch baut
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-    const { url, task, browserType, clickDepth, domain, personaType, language } = await request.json() as {
+    // ⭐️ FIX: debugMode im Typ hinzugefügt
+    const { url, task, browserType, clickDepth, domain, personaType, language, debugMode = true } = await request.json() as {
         url: string;
         task: string;
         browserType: 'chrome' | 'firefox' | 'safari';
@@ -26,49 +27,60 @@ export async function POST(request: NextRequest) {
         domain: string;
         personaType: PersonaType;
         language?: Language;
+        debugMode?: boolean; // ⭐️ NEU: Debug-Flag
     };
 
     const lang: Language = language || 'de';
-    const maxSteps = clickDepth || 8; // Fallback auf 8 Schritte
+    const maxSteps = clickDepth || 8;
 
     if (!url || !task || !domain || !personaType) {
-        return new Response(
-            JSON.stringify({ message: 'URL, Aufgabe, Domain und Persona erforderlich' }),
-            { status: 400, headers: { 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ message: 'URL, Aufgabe, Domain und Persona erforderlich' }), { status: 400 });
     }
 
     const stream = new ReadableStream({
         async start(controller) {
             const structuredLog: LogStep[] = [];
-            let browser: any = null; // 'any' statt 'Browser' für flexibleres Handling
+            let browser: any = null;
 
-            // SessionState mit allen Feldern aus types.ts initialisieren
             const sessionState: SessionState = {
-                searchText: null,
-                searchSubmitted: false,
-                onSearchResults: false,
-                onProductPage: false,
-                currentUrl: '',
-                lastAction: '',
-                actionHistory: [],
-                seenSearchField: false,
-                searchFieldPosition: 'unknown',
-                scrollCount: 0,
-                consecutiveScrolls: 0
+                searchText: null, searchSubmitted: false, onSearchResults: false, onProductPage: false,
+                currentUrl: '', lastAction: '', actionHistory: [], seenSearchField: false,
+                searchFieldPosition: 'unknown', scrollCount: 0, consecutiveScrolls: 0
             };
 
+            // ⭐️ FIX: Alle ReAct-Variablen hier mit 'let' deklarieren
+            let plan: string = "";
+            let observation: string = "";
+            let verification: any = {};
+            let result: string = "";
+            let reflection: string = "";
+            let elements: InteractableElement[] = [];
+            let screenshotBuffer: Buffer;
+            let annotated: string | null = null;
+            // const timings_ms: Record<string, number> = {}; // HINWEIS: timings_ms ist pro Schritt
+
             try {
-                console.log(`[START] Simulation for ${url}`);
-                sendSSE(controller, { type: 'progress', value: 10, status: lang === 'de' ? 'Generiere Persona...' : 'Generating persona...' });
+                console.log(`[START] Simulation for ${url} (Debug: ${debugMode})`);
+                sendSSE(controller, { type: 'progress', value: 10, status: lang === 'de' ? 'Lade Persona...' : 'Loading persona...' });
 
-                const personaPrompt = await generatePersona(task, domain, personaType, lang);
-                console.log(`[PERSONA] Generated`);
+                // ⭐️ FIX: Persona aus Cache laden statt live generieren
+                const personaPrompt = pragmaticPersonaDE; // Spart ~45 Sekunden
+                console.log(`[PERSONA] Loaded from cache`);
+
+                const personaLines = personaPrompt.split('\n').filter(l => l.trim());
+                const personaStep: LogStep = {
+                    step: "Schritt 1.2 (Persona-Briefing)",
+                    logs: ["✓ KI-Agent instruiert:", "─".repeat(50), ...personaLines, "─".repeat(50)],
+                    timestamp: Date.now()
+                };
+                structuredLog.push(personaStep);
+                sendSSE(controller, { type: 'step', step: personaStep, progress: 15 });
+
                 sendSSE(controller, { type: 'progress', value: 20, status: lang === 'de' ? 'Starte Browser...' : 'Starting browser...' });
-
                 browser = await launchBrowser(browserType);
                 const page = await browser.newPage({
-                    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+                    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                    viewport: { width: 1920, height: 1080 }
                 });
 
                 sendSSE(controller, { type: 'progress', value: 30, status: lang === 'de' ? 'Lade Website...' : 'Loading website...' });
@@ -77,20 +89,22 @@ export async function POST(request: NextRequest) {
                 console.log(`[LOADED] ${sessionState.currentUrl}`);
 
                 // Step 1: Start
-                const startStep: LogStep = {
-                    step: "Schritt 1 (Start)",
-                    logs: [`✓ Navigiere zu: ${url}`],
-                    image: (await page.screenshot({ type: 'png' })).toString('base64'),
-                    timestamp: Date.now()
-                };
-                structuredLog.push(startStep);
-                sendSSE(controller, { type: 'step', step: startStep, progress: 35 });
+                if (debugMode) {
+                    const startStep: LogStep = {
+                        step: "Schritt 1 (Start)",
+                        logs: [`✓ Navigiere zu: ${url}`],
+                        image: (await page.screenshot({ type: 'png' })).toString('base64'),
+                        timestamp: Date.now()
+                    };
+                    structuredLog.push(startStep);
+                    sendSSE(controller, { type: 'step', step: startStep, progress: 35 });
+                }
 
                 // Step 1.5: Cookie
                 const cookieLogs: string[] = [];
                 const dismissed = await checkAndDismissCookie(page, cookieLogs);
-                if (dismissed) {
-                    await page.waitForTimeout(1000); // Warten bis Banner weg ist
+                if (dismissed && debugMode) {
+                    await page.waitForTimeout(1000);
                     const cookieStep: LogStep = {
                         step: "Schritt 1.5 (Cookie-Banner)",
                         logs: cookieLogs,
@@ -106,102 +120,98 @@ export async function POST(request: NextRequest) {
                     const progress = 40 + Math.round((i / maxSteps) * 50);
                     const stepName = `Schritt ${i + 2}/${maxSteps + 2}`;
                     const stepLogs: string[] = [];
+                    const step_timings_ms: Record<string, number> = {}; // Timings für diesen Schritt
+                    let stepStart = Date.now();
 
                     console.log(`\n[STEP ${i + 1}/${maxSteps}] ReAct Loop Starting...`);
                     sendSSE(controller, { type: 'progress', value: progress, status: stepName });
 
-                    // Erneut nach Cookies suchen, falls einer nachgeladen wurde
                     await checkAndDismissCookie(page, stepLogs);
-                    await page.waitForTimeout(500); // Kurze Pause
-
-                    // LOOP DETECTION (aus deiner Streaming-Datei)
-                    const recentPlans = sessionState.actionHistory.slice(-4).map(h => h.plan);
-                    const allSamePlan = recentPlans.length >= 4 && recentPlans.every(p => p === recentPlans[0]);
-
-                    if (allSamePlan) {
-                        // ... (Dein Loop-Detection-Code von Zeile 92-125 ist gut)
-                    }
+                    await page.waitForTimeout(500);
 
                     // 1️⃣ PLAN
-                    stepLogs.push(`🎯 Phase 1: Planning...`);
-                    console.log(`[STEP ${i + 1}] Getting plan...`);
-                    let plan: string;
+                    stepStart = Date.now();
                     try {
+                        // ⭐️ FIX: 'const' entfernt
                         plan = await getPlan(task, personaPrompt, personaType, sessionState, page.url(), lang);
-                        console.log(`[STEP ${i + 1}] Plan: "${plan}"`);
+                        step_timings_ms.plan = Date.now() - stepStart;
+                        console.log(`[STEP ${i + 1}] Plan: "${plan}" (${step_timings_ms.plan}ms)`);
                         stepLogs.push(` 💭 Plan: "${plan}"`);
-                    } catch (error) {
-                        stepLogs.push(` ❌ Plan Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        stepLogs.push(` ⏱️ Plan: ${step_timings_ms.plan}ms`);
+                    } catch (error: any) {
+                        stepLogs.push(` ❌ Plan Error: ${error.message}`);
                         console.error(`[STEP ${i + 1}] Plan error:`, error);
                         break;
                     }
 
                     // 2️⃣ OBSERVE
-                    stepLogs.push(`👁️ Phase 2: Observing...`);
-                    console.log(`[STEP ${i + 1}] Getting observation...`);
-
-                    await page.waitForTimeout(1200); // Warten auf Lazy Loading
-
-                    const screenshotBuffer = await page.screenshot({ type: 'png' });
-
-                    // WICHTIG: getInteractableElements MUSS Elemente mit 'id' zurückgeben!
-                    // Deine `elements.ts` macht das korrekt via `r.index = i`.
-                    const elements = await getInteractableElements(page);
-                    console.log(`[STEP ${i + 1}] Found ${elements.length} elements`);
-
-                    // Blinder Agent?
-                    if (elements.length < 5 && i > 0) { // < 5 (nach dem Start) ist verdächtig
-                        stepLogs.push(` ⚠️ WARNUNG: Nur ${elements.length} Elemente gefunden. Möglicher Cookie-Banner blockiert die Sicht.`);
-                        console.warn(`[STEP ${i + 1}] Nur ${elements.length} Elemente. Blockiert?`);
-                    }
-
-                    const annotated = await annotateImage(screenshotBuffer, elements);
-                    stepLogs.push(` 📊 Gefunden: ${elements.length} Elemente`);
-                    stepLogs.push(` 🎯 Top 5: ${elements.slice(0, 5).map(e => `[${e.id}:${e.role}:${e.text?.substring(0, 20) || 'no-text'}]`).join(', ')}`);
-
-                    let observation: string;
+                    stepStart = Date.now();
+                    annotated = null; // Zurücksetzen
                     try {
-                        observation = await observeCurrentState(page, plan, elements, annotated, lang);
-                        console.log(`[STEP ${i + 1}] Observation: "${observation.substring(0, 100)}..."`);
-                        stepLogs.push(` 👀 Observation: "${observation}"`);
-                    } catch (error) {
-                        stepLogs.push(` ❌ Observation Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        // ⭐️ FIX: 'const' entfernt
+                        screenshotBuffer = await page.screenshot({ type: 'png' });
+
+                        // ⭐️ FIX: 'const' entfernt UND 'onSearchResults' übergeben
+                        elements = await getInteractableElements(page, sessionState.onSearchResults);
+                        console.log(`[STEP ${i + 1}] Found ${elements.length} elements (OnSearchResults: ${sessionState.onSearchResults})`);
+
+                        if (debugMode) {
+                            // ⭐️ FIX: 'const' entfernt
+                            annotated = await annotateImage(screenshotBuffer, elements);
+                        }
+
+                        // ⭐️ FIX: 'const' entfernt
+                        observation = await observeCurrentState(page, plan, elements, annotated || screenshotBuffer.toString('base64'), lang);
+
+                        step_timings_ms.observe = Date.now() - stepStart;
+                        // ⭐️ FIX: Doppelte Zeilen entfernt
+                        stepLogs.push(` 📊 Gefunden: ${elements.length} Elemente`);
+                        stepLogs.push(` 👀 Observation: "${observation.substring(0, 100)}..."`); // Gekürzt für saubere Logs
+                        stepLogs.push(` ⏱️ Observe (inkl. Screenshot/Elements): ${step_timings_ms.observe}ms`);
+                    } catch (error: any) {
+                        stepLogs.push(` ❌ Observation Error: ${error.message}`);
                         console.error(`[STEP ${i + 1}] Observation error:`, error);
                         break;
                     }
 
                     // 3️⃣ VERIFY
-                    stepLogs.push(`✅ Phase 3: Verifying...`);
-                    console.log(`[STEP ${i + 1}] Verifying match...`);
-                    let verification: any;
+                    stepStart = Date.now();
                     try {
-                        verification = await verifyPlanMatch(plan, observation, elements, sessionState, task, lang);
-                        console.log(`[STEP ${i + 1}] Verification:`, verification);
-                        stepLogs.push(` 🔍 Match: ${verification.match} (${Math.round(verification.confidence * 100)}%)`);
+                        // ⭐️ FIX: 'const' entfernt
+                        verification = await verifyPlanMatch(plan, observation, elements, sessionState, task, personaType, lang); // ⭐️ HIER HINZUGEFÜGT
+
+                        step_timings_ms.verify = Date.now() - stepStart;
+                        console.log(`[STEP ${i + 1}] Verify: ${verification.action} (${step_timings_ms.verify}ms)`);
                         stepLogs.push(` 🎬 Action: ${verification.action}${verification.elementId !== undefined ? ` [ID ${verification.elementId}]` : ''}`);
                         stepLogs.push(` 📝 Rationale: "${verification.rationale}"`);
-                    } catch (error) {
-                        stepLogs.push(` ❌ Verification Error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                        stepLogs.push(` ⏱️ Verify: ${step_timings_ms.verify}ms`);
+                    } catch (error: any) {
+                        stepLogs.push(` ❌ Verification Error: ${error.message}`);
                         console.error(`[STEP ${i + 1}] Verification error:`, error);
                         break;
                     }
 
                     // 4️⃣ EXECUTE
-                    stepLogs.push(`🎬 Phase 4: Executing...`);
-                    console.log(`[STEP ${i + 1}] Executing action: ${verification.action}`);
-                    let result = '';
+                    stepStart = Date.now();
                     try {
-                        // ⭐️ KORREKTUR HIER: `personaType` hinzugefügt ⭐️
+                        // ⭐️ FIX: 'const' entfernt
                         result = await executeAction(verification, page, elements, task, personaType);
+                        step_timings_ms.execute = Date.now() - stepStart;
+                        console.log(`[STEP ${i + 1}] Execute: "${result}" (${step_timings_ms.execute}ms)`);
                         stepLogs.push(` ✅ ${result}`);
-                    } catch (error) {
-                        result = `Fehler: ${error instanceof Error ? error.message : 'Unknown'}`;
+                        stepLogs.push(` ⏱️ Execute: ${step_timings_ms.execute}ms`);
+                    } catch (error: any) {
+                        result = `Fehler: ${error.message}`;
                         stepLogs.push(` ❌ ${result}`);
                         console.error(`[STEP ${i + 1}] Execution error:`, error);
-                        // Nicht abbrechen, sondern reflektieren lassen
                     }
 
-                    // Scroll-Zählung
+                    // ⭐️ FIX: "Gedächtnis" setzen, dass die Suche passiert ist
+                    if (verification.action === 'type' && verification.elementId === 0) { // Annahme, dass ID 0 die Suche ist
+                        sessionState.searchSubmitted = true;
+                        console.log(`[ROUTE] 🧠 Gedächtnis: Suche wurde abgeschickt.`);
+                    }
+
                     if (verification.action === 'scroll') {
                         sessionState.scrollCount = (sessionState.scrollCount || 0) + 1;
                         sessionState.consecutiveScrolls = (sessionState.consecutiveScrolls || 0) + 1;
@@ -209,19 +219,19 @@ export async function POST(request: NextRequest) {
                     } else {
                         sessionState.consecutiveScrolls = 0;
                     }
-
-                    await page.waitForTimeout(800); // Warten auf Seitenreaktion
+                    await page.waitForTimeout(800);
                     updateSessionState(page, sessionState);
 
                     // 5️⃣ REFLECT
-                    stepLogs.push(`🔄 Phase 5: Reflecting...`);
-                    console.log(`[STEP ${i + 1}] Reflecting...`);
-                    let reflection: string;
+                    stepStart = Date.now();
                     try {
+                        // ⭐️ FIX: 'const' entfernt
                         reflection = await reflectOnProgress(plan, observation, result, sessionState, task, i + 1, lang);
-                        console.log(`[STEP ${i + 1}] Reflection: "${reflection}"`);
+                        step_timings_ms.reflect = Date.now() - stepStart;
+                        console.log(`[STEP ${i + 1}] Reflect: "${reflection}" (${step_timings_ms.reflect}ms)`);
                         stepLogs.push(` 💡 Reflection: "${reflection}"`);
-                    } catch (error) {
+                        stepLogs.push(` ⏱️ Reflect: ${step_timings_ms.reflect}ms`);
+                    } catch (error: any) {
                         reflection = "Weiter";
                         stepLogs.push(` ⚠️ Reflection Error, continuing...`);
                     }
@@ -231,12 +241,13 @@ export async function POST(request: NextRequest) {
                     const currentStep: LogStep = {
                         step: stepName,
                         logs: stepLogs,
-                        image: annotated, // Sendet annotiertes Bild an FE
+                        image: annotated, // Sendet 'null' wenn debugMode=false
                         timestamp: Date.now(),
                         plan,
                         observation,
                         verification,
-                        reflection
+                        reflection,
+                        timings_ms: step_timings_ms // ⭐️ NEU: Timings
                     };
                     structuredLog.push(currentStep);
                     sendSSE(controller, { type: 'step', step: currentStep });
@@ -271,10 +282,6 @@ export async function POST(request: NextRequest) {
     });
 
     return new Response(stream, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache', // redundant mit cache: 'no-store' im FE, aber sicher ist sicher
-            'Connection': 'keep-alive',
-        },
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
     });
 }

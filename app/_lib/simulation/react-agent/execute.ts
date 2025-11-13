@@ -203,26 +203,26 @@ async function executeType(
  */
 async function executeScroll(
     page: Page,
-    direction: 'up' | 'down',
+    direction: 'up' | 'down', // Dieser Parameter wird jetzt genutzt
     personaType: PersonaType
 ): Promise<string> {
 
-    // "Oma" (Vorsichtig) scrollt in kleineren Schritten, "Ich" (Pragmatisch) scrollt schnell/weit
     const scrollAmount = personaType === 'Pragmatisch & Zielorientiert' ? 1000 : 700;
     const behavior = personaType === 'Vorsichtig & Skeptisch' ? 'smooth' : 'auto';
-    const amount = direction === 'down' ? scrollAmount : -scrollAmount;
 
-    console.log(`[EXECUTE] Scrolle ${direction} um ${scrollAmount}px (Behavior: ${behavior})`);
+    // ⭐️ KORREKTUR: 'direction' wird hier verwendet ⭐️
+    const amount = direction === 'down' ? scrollAmount : -scrollAmount; // Negativer Wert für "Hochscrollen"
+
+    console.log(`[EXECUTE] Scrolle ${direction} um ${Math.abs(amount)}px (Behavior: ${behavior})`);
 
     await page.evaluate(({ amount, behavior }) => {
         window.scrollBy({
             top: amount,
-            behavior: behavior as ScrollBehavior // 'smooth' oder 'auto'
+            behavior: behavior as ScrollBehavior
         });
     }, { amount, behavior });
 
-    // Warten, bis Scrollen + Lazy Loading abgeschlossen ist
     await page.waitForTimeout(getPostActionDelay(personaType));
 
-    return `📜 ${direction === 'down' ? 'Runter' : 'Hoch'} gescrollt (${scrollAmount}px)`;
+    return `📜 ${direction === 'down' ? 'Runter' : 'Hoch'} gescrollt (${Math.abs(amount)}px)`;
 }

@@ -4,12 +4,13 @@
 export type LogStep = {
     step: string;
     logs: string[];
-    image?: string;
+    image?: string | null; // ⭐️ ÄNDERUNG: null erlauben
     timestamp?: number;
     plan?: string;
     observation?: string;
     verification?: any;
     reflection?: string;
+    timings_ms?: Record<string, number>; // ⭐️ NEU: Timings
 };
 
 export type InteractableElement = {

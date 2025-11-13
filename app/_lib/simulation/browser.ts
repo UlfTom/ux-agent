@@ -1,6 +1,8 @@
 // app/_lib/simulation/browser.ts
+// ⭐️ ROBUSTERE VERSION ⭐️
 
-import { chromium, firefox, webkit, Browser } from 'playwright';
+import { chromium, firefox, webkit, Browser, Page } from 'playwright';
+import type { SessionState } from './types'; // Importiere SessionState
 
 export async function launchBrowser(
     browserType: 'chrome' | 'firefox' | 'safari'
@@ -16,40 +18,59 @@ export async function launchBrowser(
 }
 
 export async function checkAndDismissCookie(
-    page: any,
+    page: Page,
     logs: string[]
 ): Promise<boolean> {
     try {
-        // Robusteres Regex
-        const cookieRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all|Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it|Ich stimme zu)$/i;
+        // ⭐️ KORREKTUR: Gezielte, dumme Suche nach Cookie-Buttons.
+        // Unabhängig von elements.ts!
 
-        // ⭐️ KORREKTUR: Suche nach Text statt nur 'button' role.
-        // Das findet auch <a role="button"> oder <div>-basierte Buttons.
-        const cookieButton = page.locator(`*:text-matches("${cookieRegex}")`).first();
-
-        const isVisible = await cookieButton.isVisible({ timeout: 1500 }); // Etwas mehr Zeit geben
-        if (isVisible) {
-            logs.push('🍪 Cookie-Banner gefunden! Klicke...');
-            await cookieButton.click({ timeout: 3000, force: true }); // force: true klickt auch wenn was davor liegt
-            await page.waitForTimeout(1000); // Warten bis Banner weg-animiert ist
-            logs.push('✓ Cookie dismissed');
+        // Versuch 1: Der "OK" Button von OTTO
+        const ottoButton = page.getByRole('button', { name: 'OK', exact: true });
+        if (await ottoButton.isVisible({ timeout: 1500 })) {
+            logs.push('🍪 Cookie-Banner (OTTO) gefunden! Klicke "OK"...');
+            await ottoButton.click({ timeout: 3000, force: true });
+            await page.waitForTimeout(1000);
+            logs.push('✓ Cookie dismissed (OTTO)');
             return true;
         }
-    } catch {
-        // Kein Cookie-Banner gefunden, alles gut
+
+        // Versuch 2: Generisches Regex (wie für Airbnb)
+        const genericRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all|Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it|Ich stimme zu)$/i;
+        const genericButton = page.getByRole('button', { name: genericRegex }).first();
+        if (await genericButton.isVisible({ timeout: 1000 })) {
+            logs.push('🍪 Generischer Cookie-Banner gefunden! Klicke...');
+            await genericButton.click({ timeout: 3000, force: true });
+            await page.waitForTimeout(1000);
+            logs.push('✓ Cookie dismissed (Generisch)');
+            return true;
+        }
+
+    } catch (e: any) {
+        logs.push(`⚠️ Cookie-Check-Fehler: ${e.message.split('\n')[0]}`);
     }
+    logs.push('ℹ️ Kein Cookie-Banner gefunden oder geklickt.');
     return false;
 }
 
-export function updateSessionState(page: any, sessionState: any) {
+export function updateSessionState(page: Page, sessionState: SessionState) {
     const currentUrl = page.url();
     sessionState.currentUrl = currentUrl;
 
-    if (currentUrl.includes('/suche/') ||
+    // Generische Produkt/Detailseiten-Erkennung
+    if (currentUrl.includes('/p/') || currentUrl.includes('/produkt/') || currentUrl.includes('/item/') || currentUrl.includes('/rooms/')) {
+        sessionState.onProductPage = true;
+        sessionState.onSearchResults = false;
+    }
+    // Generische Suchergebnis-Erkennung
+    else if (currentUrl.includes('/suche/') ||
         currentUrl.includes('/search/') ||
         currentUrl.includes('?q=') ||
-        currentUrl.includes('/results')) {
+        currentUrl.includes('/s/')) {
         sessionState.onSearchResults = true;
-        sessionState.searchSubmitted = true;
+        sessionState.onProductPage = false;
+    } else {
+        sessionState.onSearchResults = false;
+        sessionState.onProductPage = false;
     }
 }
