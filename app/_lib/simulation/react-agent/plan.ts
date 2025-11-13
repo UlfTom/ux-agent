@@ -1,5 +1,5 @@
 // app/_lib/simulation/react-agent/plan.ts
-// ⭐️ KORREKTE, SAUBERE VERSION ⭐️
+// ⭐️ NEUE VERSION (GENERISCH & KONTEXTBEWUSST) ⭐️
 
 import { callOllama } from '../utils';
 import { SessionState, PersonaType, Language } from '../types';
@@ -12,34 +12,23 @@ export async function getPlan(
     currentUrl: string,
     language: Language = 'de'
 ): Promise<string> {
-    console.log(`[PLAN] Generiere generischen Plan für: ${currentUrl}`);
+    console.log(`[PLAN] Generiere Plan. Kontext: onPDP=${sessionState.onProductPage}, onResults=${sessionState.onSearchResults}`);
 
-    // 1. Generische URL-Analyse
-    let urlObj;
-    try {
-        urlObj = new URL(currentUrl);
-    } catch (e) {
-        urlObj = { pathname: '/', search: '' };
-    }
-
-    // Seitentyp bestimmen
-    const isHomepage = urlObj.pathname === '/' || urlObj.pathname === '';
-    const isSearchPage = sessionState.onSearchResults;
-    const isProductPage = sessionState.onProductPage;
-
-    // Kontext für die KI zusammenstellen
+    // 1. Kontext für die KI zusammenstellen
     const context = language === 'de' ? `
 **Navigations-Kontext:**
 - Aktuelle URL: ${currentUrl}
-- Seitentyp (geschätzt): ${isProductPage ? 'DETAILSEITE' : isSearchPage ? 'LISTEN- / ERGEBNISSEITE' : 'STARTSEITE'}
+- Auf Startseite: ${!sessionState.onSearchResults && !sessionState.onProductPage}
+- Auf Ergebnisseite: ${sessionState.onSearchResults}
+- Auf Detailseite: ${sessionState.onProductPage}
 - Letzte Aktion: ${sessionState.lastAction || 'Start der Session'}
-- Suche bereits genutzt (Gedächtnis): ${sessionState.searchSubmitted ? 'JA' : 'NEIN'}
 ` : `
 **Navigation Context:**
 - Current URL: ${currentUrl}
-- Page Type (estimated): ${isProductPage ? 'DETAIL PAGE' : isSearchPage ? 'LIST / RESULTS PAGE' : 'HOMEPAGE'}
+- On Homepage: ${!sessionState.onSearchResults && !sessionState.onProductPage}
+- On Search Results: ${sessionState.onSearchResults}
+- On Detail Page: ${sessionState.onProductPage}
 - Last Action: ${sessionState.lastAction || 'Session Start'}
-- Search used (Memory): ${sessionState.searchSubmitted ? 'YES' : 'NO'}
 `;
 
     // 2. Generische Verhaltensregeln (Domain-Agnostisch)
@@ -50,23 +39,25 @@ Du bist ein universeller User-Agent. Du weißt NICHT, auf welcher Art von Websit
 
 **Deine Regeln für den nächsten Schritt, basierend auf dem SEITENTYP:**
 
-1. **Auf einer STARTSEITE:**
-   - **Ziel:** Orientierung finden und die Aufgabe starten.
-   - **Pragmatische Persona (Du):** Nutze die **SUCHFUNKTION**. Das ist fast immer der schnellste Weg.
+1. **Wenn 'Auf Startseite' true ist:**
+   - **Ziel:** Die Aufgabe starten.
+   - **Pragmatische Persona (Du):** Nutze die **SUCHFUNKTION**.
+   - **Plan-Beispiel:** "Suchfunktion nutzen, um [Task] zu finden."
 
-2. **Auf einer LISTEN- / ERGEBNISSEITE (z.B. nach einer Suche):**
+2. **Wenn 'Auf Ergebnisseite' true ist:**
    - **Ziel:** Das beste Ergebnis anhand der Persona-Leitplanken finden.
    - **Aktion:** Scanne die sichtbaren Ergebnisse.
-   - **Entscheidung:** "Passendes Produkt/Listing auswählen" (basierend auf Task und Persona).
-   - **Fallback:** Wenn nichts passt oder du mehr Auswahl brauchst -> "scrollen".
+   - **Entscheidung:** "Passendes Produkt/Listing auswählen."
+   - **Fallback:** Wenn nichts passt -> "scrollen".
 
-3. **Auf einer DETAILSEITE (PDP / Job-Detail / Airbnb-Listing):**
-   - **Ziel:** Prüfen, ob das Element die Aufgabe erfüllt, und die finale Aktion ausführen.
-   - **Aktion:** Suche nach den "Leitplanken" (Preis, Größe, Standort, Bewertungen).
+3. **Wenn 'Auf Detailseite' true ist:**
+   - **Ziel:** Die Aufgabe abschließen (Kauf/Buchung).
+   - **Aktion:** Suche nach den finalen Aktions-Buttons.
    - **Entscheidung:**
-     - Wenn alles passt -> "In den Warenkorb legen", "Jetzt buchen", "Bewerben".
-     - Wenn etwas fehlt -> "Größe 42 auswählen", "Datum auswählen".
-     - Wenn es nicht passt -> "Zurück zu den Ergebnissen".
+     - **Plan-Beispiel:** "Produkt in den Warenkorb legen."
+     - **Plan-Beispiel:** "Größe oder Option auswählen."
+     - **Plan-Beispiel:** "Buchung abschließen" oder "Datum auswählen."
+     - (Wenn es nicht passt -> "Zurück zu den Ergebnissen".)
 
 **Entscheide basierend auf deiner Persona ("${personaType}"):**
 - Pragmatisch: Wählt den direktesten Weg.
@@ -84,21 +75,17 @@ ${context}
 ${strategyDE}
 
 **Was ist dein nächster logischer Schritt?** (1 kurzer Satz)
-Beispiele für gute, generische Pläne:
-- "Suchfunktion nutzen um Ziel zu finden"
-- "Passendes Produkt aus der Liste auswählen"
-- "Nach unten scrollen um mehr Inhalte zu sehen"
-- "Produktdetails prüfen und in den Warenkorb legen"
-
 Dein Plan:`;
 
     try {
-        // HINWEIS: Hier ist kein `elementList`
         const plan = await callOllama('mistral:latest', prompt, undefined, language, undefined);
         console.log(`[PLAN] Generated: "${plan}"`);
+        // Letzte Aktion für den nächsten Plan-Schritt speichern
+        sessionState.lastAction = plan;
         return plan.trim();
     } catch (error) {
         console.error('[PLAN] Error:', error);
+        sessionState.lastAction = "Error";
         return "Seite analysieren und Orientierung suchen"; // Fallback
     }
 }

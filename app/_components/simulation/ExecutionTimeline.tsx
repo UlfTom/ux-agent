@@ -57,18 +57,18 @@ export function ExecutionTimeline({
     return (
         <>
             {/* Header */}
-            <div className="mb-10">
-                <div className="flex items-center justify-between mb-4 relative">
-                    <Line></Line>
-                    <p className='m-0 p-0 px-2 bg-white h-4 -top-2 absolute inset-auto w-fit'>Execution Timeline</p>
-                </div>
-                <div className="flex items-center justify-between">
+            {/* Timeline View */}
+            {log.length > 0 ? (
+                <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex -mx-6 justify-between pb-3 border-b-2 sticky top-32">
+                        <>
+                            <Birdhouse className="h-8 w-8 text-black" />
+                            <p className="text-xs font-medium text-muted-foreground font-mono">
+                                EXECUTION TIMELINE
+                            </p>
+                        </>
 
-                    <div className="flex flex-row items-center gap-8">
-                        <Birdhouse className="h-8 w-8 text-black" />
-                        <p className="font-mono">Debug Mode is on</p>
-                    </div>
-                    {log.length > 0 && (
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={handleCopyLog} className="gap-2">
                                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -79,19 +79,6 @@ export function ExecutionTimeline({
                                 Export
                             </Button>
                         </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Timeline View */}
-            {log.length > 0 ? (
-                <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-center gap-3 pb-3 border-b">
-                        <div className="h-2 w-2 rounded-full bg-primary" />
-                        <p className="text-xs font-medium text-muted-foreground font-mono">
-                            EXECUTION TIMELINE
-                        </p>
                     </div>
                     {/* Items */}
                     <div className="space-y-0">
@@ -181,9 +168,10 @@ export function ExecutionTimeline({
                     )}
                 </div>
             ) : (
-                <Card className="border-2 p-12 text-center">
-                    {/* ... (Platzhalter für "No simulation data" bleibt gleich) ... */}
-                </Card>
+                <div className="flex flex-col items-center justify-center text-center text-muted-foreground">
+                    <Birdhouse className="h-8 w-8 text-black" />
+                    <p>Starte eine neue Simulation um Ergebnisse zu sehen.</p>
+                </div>
             )}
         </>
     );

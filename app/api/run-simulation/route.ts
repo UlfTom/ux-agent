@@ -206,13 +206,6 @@ export async function POST(request: NextRequest) {
                         console.error(`[STEP ${i + 1}] Execution error:`, error);
                     }
 
-                    // ⭐️ KORREKTUR: "Gedächtnis" setzen, dass die Suche passiert ist
-                    if (verification.action === 'type' && verification.elementId === 0) { // Annahme, dass ID 0 die Suche ist
-                        sessionState.searchSubmitted = true;
-                        console.log(`[ROUTE] 🧠 Gedächtnis: Suche wurde abgeschickt.`);
-                        stepLogs.push(` 🧠 Gedächtnis: Suche abgeschickt.`);
-                    }
-
                     // ⭐️ KORREKTUR: "Gedächtnis" wird jetzt generisch gesetzt
                     if (verification.rationale && verification.rationale.includes("Heuristik: Plan will suchen")) {
                         sessionState.searchSubmitted = true;

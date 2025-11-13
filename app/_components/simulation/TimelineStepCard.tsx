@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { Button } from "@/app/_components/ui/button";
-import { Card, CardContent } from "@/app/_components/ui/card";
+import { Card, CardContent, CardHeader } from "@/app/_components/ui/card";
 import { Clock, CheckCircle2, XCircle, AlertCircle, ImageUp, ImageDown } from "lucide-react";
 import { motion } from 'framer-motion';
 import { LogStep } from '@/app/_lib/simulation/types'; // ⭐️ WICHTIG: Importiert den globalen Typ
@@ -19,7 +19,6 @@ export function TimelineStepCard({
     isLast: boolean;
     startTime?: number;
 }) {
-    const [imageExpanded, setImageExpanded] = useState(false);
 
     // ⭐️ Prüft auf echte Fehler-Logs
     const isError = step.step.includes('FEHLER') || step.logs.some(l => l.includes('❌') || l.includes('Fehler:'));
@@ -68,7 +67,22 @@ export function TimelineStepCard({
                 {/* Content */}
                 <div className="flex-1 pb-6">
                     <Card className={`p-0 ${isError ? 'border-destructive/50 bg-destructive/5' : ''} shadow-sm overflow-hidden`}>
-                        <CardContent className="p-4">
+                        <CardHeader className="border-b-2 p-0 m-0">
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden max-h-60"
+                            >
+                                <img
+                                    src={`data:image/png;base64,${step.image}`}
+                                    alt={step.step}
+                                    className="w-full"
+                                />
+                            </motion.div>
+                        </CardHeader>
+                        <CardContent className="px-6 pt-4 pb-8">
 
                             {/* Header */}
                             <div className="flex items-start justify-between gap-4 mb-3">
@@ -81,13 +95,6 @@ export function TimelineStepCard({
                                         {isSuccess && (<div className="flex items-center gap-1.5 text-green-600 font-semibold"><span>SUCCESS</span></div>)}
                                     </div>
                                 </div>
-
-                                {/* ⭐️ Bild-Button prüft jetzt, ob image !== null ist */}
-                                {step.image && (
-                                    <Button variant="ghost" size="sm" onClick={() => setImageExpanded(!imageExpanded)} className="h-8 px-2 flex-shrink-0">
-                                        {imageExpanded ? <ImageUp className="h-4 w-4" /> : <ImageDown className="h-4 w-4" />}
-                                    </Button>
-                                )}
                             </div>
 
                             {/* Logs */}
@@ -96,23 +103,6 @@ export function TimelineStepCard({
                                     {step.logs.join('\n')}
                                 </pre>
                             </div>
-
-                            {/* Screenshot (wird nur gerendert, wenn image existiert) */}
-                            {step.image && imageExpanded && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                    className="mt-3 border-2 rounded-lg overflow-hidden"
-                                >
-                                    <img
-                                        src={`data:image/png;base64,${step.image}`}
-                                        alt={step.step}
-                                        className="w-full"
-                                    />
-                                </motion.div>
-                            )}
                         </CardContent>
                     </Card>
                 </div>

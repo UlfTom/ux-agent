@@ -50,16 +50,15 @@ export function ConfigurationPanel({
 }: ConfigurationPanelProps) {
 
     return (
-        <Card className="rounded-none shadow-none border-2 rounded-2xl px-6 pt-4 pb-8">
-            <CardHeader className="p-0 flex flex-col gap-2">
-                <h2 className="font-headline text-base text-black">
-                    Configuration
-                </h2>
-                <p></p>
-            </CardHeader>
-            <CardContent className="p-0 m-0">
-                <form onSubmit={handleStartSimulation} className="flex flex-col gap-8">
-
+        <>
+            <Card className="rounded-none shadow-none border-2 rounded-2xl px-6 pt-4 pb-8">
+                <CardHeader className="p-0 flex flex-col gap-2">
+                    <h2 className="font-headline text-base text-black">
+                        Configuration
+                    </h2>
+                    <p></p>
+                </CardHeader>
+                <CardContent className="p-0 m-0 flex flex-col gap-8">
                     {/* ... (URL, Task, Browser, Max Actions Inputs bleiben gleich) ... */}
                     <div className="flex flex-row gap-8">
                         {/* URL */}
@@ -150,40 +149,40 @@ export function ConfigurationPanel({
                             </Select>
                         </div>
                     </div>
-
-                    {/* Submit Button */}
-                    <Button
-                        type="submit"
-                        disabled={loading}
-                        className="w-100 h-12 fixed bottom-8 inset-x-0 m-auto overflow-hidden font-display font-bold text-base backdrop-blur-xl z-500"
-                        style={{ background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)` }}
-                    >
-                        {/* ... (Inhalt des Buttons bleibt gleich) ... */}
-                        <div className="absolute inset-0" style={{ background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)` }} />
-                        <div className="absolute inset-0 bg-white/20 transition-all duration-300" style={{ width: `${progress}%` }} />
-                        {loading && (
-                            <div className="absolute inset-0 bg-black/10">
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
-                            </div>
-                        )}
-                        <div className="relative text-white z-10 flex items-center justify-between w-full px-4">
-                            {loading ? (
-                                <>
-                                    <span className="text-sm opacity-90"><ElapsedTimer loading={loading} /></span>
-                                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{currentStatus || 'Running...'}</span>
-                                    <span className="text-sm opacity-90">{progress}%</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Play className="h-5 w-5" />
-                                    <span>Start Simulation</span>
-                                    <div className="w-5" />
-                                </>
-                            )}
-                        </div>
-                    </Button>
-                </form>
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+            {/* Submit Button */}
+            <Button
+                type="submit"
+                onClick={handleStartSimulation}
+                disabled={loading}
+                className="w-100 h-12 fixed bottom-8 inset-x-0 m-auto overflow-hidden font-headline font-bold text-base backdrop-blur-xl z-999 rounded-2xl"
+                style={{ background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)` }}
+            >
+                {/* ... (Inhalt des Buttons bleibt gleich) ... */}
+                <div className="absolute inset-0" style={{ background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)` }} />
+                <div className="absolute inset-0 bg-white/20 transition-all duration-300" style={{ width: `${progress}%` }} />
+                {loading && (
+                    <div className="absolute inset-0 bg-black/10">
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
+                    </div>
+                )}
+                <div className="relative text-white z-10 flex items-center justify-between w-full px-4">
+                    {loading ? (
+                        <>
+                            <span className="text-sm opacity-90"><ElapsedTimer loading={loading} /></span>
+                            <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />{currentStatus || 'Running...'}</span>
+                            <span className="text-sm opacity-90">{progress}%</span>
+                        </>
+                    ) : (
+                        <>
+                            <Play className="h-5 w-5" />
+                            <span>Start Simulation</span>
+                            <div className="w-5" />
+                        </>
+                    )}
+                </div>
+            </Button>
+        </>
     );
 }

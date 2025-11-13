@@ -53,7 +53,7 @@ export async function checkAndDismissCookie(
     return false;
 }
 
-export function updateSessionState(page: any, sessionState: any) {
+export function updateSessionState(page: Page, sessionState: SessionState) { // Typen korrekt verwenden
     const currentUrl = page.url();
     sessionState.currentUrl = currentUrl;
 
