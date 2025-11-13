@@ -53,24 +53,36 @@ export async function checkAndDismissCookie(
     return false;
 }
 
-export function updateSessionState(page: Page, sessionState: SessionState) {
+export function updateSessionState(page: any, sessionState: any) {
     const currentUrl = page.url();
     sessionState.currentUrl = currentUrl;
 
-    // Generische Produkt/Detailseiten-Erkennung
-    if (currentUrl.includes('/p/') || currentUrl.includes('/produkt/') || currentUrl.includes('/item/') || currentUrl.includes('/rooms/')) {
+    // ⭐️ BESSERE GENERISCHE ERKENNUNG
+    // Zuerst auf PDP prüfen (spezifischer)
+    if (currentUrl.includes('/p/') || // Otto
+        currentUrl.includes('/produkt/') || // Universal
+        currentUrl.includes('/item/') || // Universal
+        currentUrl.includes('/dp/') || // Amazon
+        currentUrl.includes('/rooms/')) { // Airbnb
+
         sessionState.onProductPage = true;
         sessionState.onSearchResults = false;
+        console.log(`[STATE] Kontext: Auf Produktdetailseite`);
     }
-    // Generische Suchergebnis-Erkennung
+    // Dann auf Suchergebnisse
     else if (currentUrl.includes('/suche/') ||
         currentUrl.includes('/search/') ||
         currentUrl.includes('?q=') ||
-        currentUrl.includes('/s/')) {
+        currentUrl.includes('/s/')) { // Airbnb & Amazon
+
         sessionState.onSearchResults = true;
         sessionState.onProductPage = false;
-    } else {
+        console.log(`[STATE] Kontext: Auf Ergebnisseite`);
+    }
+    // Sonst ist es eine Startseite/andere Seite
+    else {
         sessionState.onSearchResults = false;
         sessionState.onProductPage = false;
+        console.log(`[STATE] Kontext: Auf Startseite/Sonstiges`);
     }
 }
