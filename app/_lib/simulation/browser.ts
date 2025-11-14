@@ -82,7 +82,9 @@ export function updateSessionState(page: Page, sessionState: SessionState) {
     else if (currentUrl.includes('/suche/') ||
         currentUrl.includes('/search/') ||
         currentUrl.includes('?q=') ||
-        currentUrl.includes('/s/')) { // Airbnb & Amazon
+        currentUrl.includes('/s/') || // Airbnb & Amazon
+        currentUrl.includes('/neuwagen/') // ⭐️ NEU: MeinAuto.de Fix
+    ) {
 
         sessionState.onSearchResults = true;
         sessionState.onProductPage = false;

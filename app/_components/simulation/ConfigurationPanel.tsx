@@ -151,6 +151,7 @@ export function ConfigurationPanel({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="Keine Einschränkung">Keine Einschränkung</SelectItem>
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">Currently locked</p>
@@ -214,7 +215,7 @@ export function ConfigurationPanel({
                 type="submit"
                 onClick={handleStartSimulation}
                 disabled={loading}
-                className="w-100 h-12 fixed bottom-8 inset-x-0 m-auto overflow-hidden font-headline font-bold text-base backdrop-blur-xl z-9999 rounded-2xl"
+                className="w-100 h-12 fixed bottom-6 inset-x-0 m-auto overflow-hidden font-headline font-bold text-base backdrop-blur-xl z-999999 rounded-2xl"
                 style={{ background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)` }}
             >
                 {/* ... (Inhalt des Buttons bleibt gleich) ... */}

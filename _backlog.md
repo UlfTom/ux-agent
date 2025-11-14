@@ -15,12 +15,12 @@
   - Vorsichtig: Verifikationsschritte, Zögern modellieren
   - Erinnerung an UI-Elemente (z.B. "Suche ist oben")
   
-- [ ] 1.3 Element-Erkennung Verbesserungen
+- [x] 1.3 Element-Erkennung Verbesserungen (IN ARBEIT)
   - Priorisierung von Suchfeldern und primären CTAs
   - Erhöhung des Erkennungslimits (80 → 120 Elemente)
   - Bessere Rollen-Erkennung für Inputs
-  - Kontext-bewusstes Element-Scoring
-
+  - Kontext-bewusstes Element-Scoring (SRP vs. Homepage)
+  
 - [ ] 1.4 Sprach-Konsistenz
   - Backend Language-Parameter Integration
   - Einheitliche Prompts in gewählter Sprache
@@ -85,7 +85,7 @@ Simulation menschlicher Einschränkungen um Barrieren zu finden, bevor echte Nut
   - ARIA-Label Checks
   - Überschriften-Hierarchie validieren
   - **Report:** Screen Reader UX Flow
-
+  
 - [ ] 3.4 Kognitive Last Assessment
   - Komplexe Navigations-Muster
   - Überwältigende Informations-Dichte
@@ -127,6 +127,33 @@ Simulation menschlicher Einschränkungen um Barrieren zu finden, bevor echte Nut
 
 ---
 
+## ⭐️ Epic 5: Advanced Agent Swarm & Analytics (NEU)
+**Status:** Geplant (v0.8)
+
+### Konzept
+Führt die Ideen deines Freundes aus. Skaliert die Simulation von n=1 auf n=X, um statistisch relevante UX-Metriken und "Intuitivität" zu messen.
+
+### High Priority Stories
+- [ ] 5.1 Multi-Agent Simulation (Swarm)
+  - Parallele Ausführung von 10, 50, 100 Agenten mit derselben Persona und Aufgabe.
+  - Aggregation aller Klick-Pfade.
+  
+- [ ] 5.2 "Golden Path" Analyse
+  - Identifiziert den am häufigsten (z.B. >80%) genutzten Pfad als "Golden Path".
+  - Definiert "Intuitivität" als %-Anteil der Agenten auf dem Golden Path.
+  
+- [ ] 5.3 Abweichungs-Analyse (Deviation Analysis)
+  - Analysiert Agenten, die vom Golden Path abweichen.
+  - Identifiziert "Rage-Clicks", Schleifen oder Verlassen der Seite als UX-Hotspots.
+  - Vergleicht Pfade (z.B. "Normaler Agent" vs. "Agent mit Farbenblindheit") wie von deinem Freund vorgeschlagen.
+  
+- [ ] 5.4 Confidence-Metrik
+  - Misst "Confidence" nicht durch LLM-Scores, sondern durch "Fallback-Nutzung".
+  - Metrik: (Anzahl der `scroll`-Fallbacks) / (Anzahl der Schritte).
+  - Hohe Fallback-Rate = "Agent konnte X nur schwer finden".
+
+---
+
 ## Technische Schulden
 - [ ] ReAct Loop Performance optimieren (aktuell ~4s pro Schritt)
 - [ ] Besseres Error Handling für Vision Model Failures
@@ -137,5 +164,7 @@ Simulation menschlicher Einschränkungen um Barrieren zu finden, bevor echte Nut
 
 ## Bugs
 - [x] Sprach-Inkonsistenz (DE ↔ EN) - Behoben in v0.2
-- [ ] Suchfeld-Erkennung (nur 4-5 Elemente gefunden)
+- [x] Suchfeld-Erkennung (nur 4-5 Elemente gefunden) - Behoben in v0.3
 - [ ] Vision Blind Spots für kleine UI-Elemente
+- [x] "Sensorischer Konflikt" (Vision vs. Code) - Behoben in v0.3
+- [x] "STOPP"-Halluzination (LLM ignoriert Regeln) - Behoben in v0.3

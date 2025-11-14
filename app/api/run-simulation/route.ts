@@ -1,5 +1,5 @@
 // app/api/run-simulation/route.ts
-// ⭐️ KORRIGIERTE FINALE VERSION (SAUBER) ⭐️
+// ⭐️ KORRIGIERTE FINALE VERSION (MIT DETERMINISTISCHER STOPP-LOGIK) ⭐️
 
 import { NextRequest } from 'next/server';
 import { launchBrowser, updateSessionState, checkAndDismissCookie } from '@/app/_lib/simulation/browser';
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
             let elements: InteractableElement[] = [];
             let screenshotBuffer: Buffer;
             let annotated: string | null = null;
+            let hasCodeProducts = false; // ⭐️ NEU: Tracker für Code-Produkte
 
             try {
                 console.log(`[START] Simulation for ${url} (Debug: ${debugMode})`);
@@ -146,6 +147,9 @@ export async function POST(request: NextRequest) {
                         elements = await getInteractableElements(page, sessionState.onSearchResults);
                         console.log(`[STEP ${i + 1}] Found ${elements.length} elements (OnSearchResults: ${sessionState.onSearchResults})`);
 
+                        // ⭐️ NEU: Überprüfe, ob klickbare Produkte im Code gefunden wurden
+                        hasCodeProducts = elements.some(e => e.priorityScore && e.priorityScore >= 6000);
+
                         if (debugMode) {
                             annotated = await annotateImage(screenshotBuffer, elements);
                         }
@@ -181,6 +185,7 @@ export async function POST(request: NextRequest) {
                     // 4️⃣ EXECUTE
                     stepStart = Date.now();
                     try {
+                        // ⭐️ KORREKTUR: 'personaType' wird übergeben
                         result = await executeAction(verification, page, elements, task, personaType);
                         step_timings_ms.execute = Date.now() - stepStart;
                         console.log(`[STEP ${i + 1}] Execute: "${result}" (${step_timings_ms.execute}ms)`);
@@ -191,8 +196,6 @@ export async function POST(request: NextRequest) {
                         stepLogs.push(` ❌ ${result}`);
                         console.error(`[STEP ${i + 1}] Execution error:`, error);
                     }
-
-                    // ⭐️ "Gedächtnis"-Logik ist jetzt in verify.ts, hier nicht mehr nötig
 
                     if (verification.action === 'scroll') {
                         sessionState.scrollCount = (sessionState.scrollCount || 0) + 1;
@@ -233,17 +236,27 @@ export async function POST(request: NextRequest) {
                     structuredLog.push(currentStep);
                     sendSSE(controller, { type: 'step', step: currentStep });
 
-                    // Abbruchbedingungen
+                    // ⭐️ NEUE DETERMINISTISCHE STOPP-LOGIK (ersetzt die halluzinierende KI-Regel)
+                    // ⭐️ FIX: (sessionState.scrollCount || 0) für Typsicherheit
+                    if (verification.action === 'scroll' && (sessionState.scrollCount || 0) >= 3 && hasCodeProducts) {
+                        const stopMsg = `🛑 STOPP: Produkte gefunden nach ${sessionState.scrollCount} Scrolls. Agent wird angewiesen, jetzt auszuwählen.`;
+                        stepLogs.push(stopMsg);
+                        console.log(`[STEP ${i + 1}] ${stopMsg}`);
+                        break;
+                    }
+                    // ⭐️ FIX: (sessionState.scrollCount || 0) für Typsicherheit
+                    if ((sessionState.scrollCount || 0) >= 5) {
+                        const stopMsg = `🛑 STOPP: Maximale Scroll-Anzahl (5) erreicht. Breche ab, um Endlosschleife zu verhindern.`;
+                        stepLogs.push(stopMsg);
+                        console.log(`[STEP ${i + 1}] ${stopMsg}`);
+                        break;
+                    }
                     if (reflection.toLowerCase().includes('stop') || reflection.toLowerCase().includes('stopp')) {
-                        stepLogs.push(`🛑 Agent meldet: Stopp!`);
-                        console.log(`[STEP ${i + 1}] Agent finished task via STOP`);
+                        stepLogs.push(`🛑 Agent meldet freiwillig: Stopp!`);
+                        console.log(`[STEP ${i + 1}] Agent finished task via reflection STOP`);
                         break;
                     }
-                    if (sessionState.scrollCount && sessionState.scrollCount >= 5) {
-                        stepLogs.push(`🛑 STOP: Zu viele Scrolls (${sessionState.scrollCount}), ending simulation`);
-                        console.log(`[STEP ${i + 1}] Stopped due to excessive scrolling`);
-                        break;
-                    }
+
                 } // Ende der for-Schleife
 
                 console.log(`[COMPLETE] ${structuredLog.length} steps`);

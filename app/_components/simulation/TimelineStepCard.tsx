@@ -48,11 +48,11 @@ export function TimelineStepCard({
                 <div className="absolute left-[19px] top-[40px] bottom-[-12px] w-[2px] bg-border" />
             )}
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-row gap-4">
                 {/* Timeline Dot */}
-                <div className="relative flex-shrink-0">
+                <div className="flex flex-col relative flex-shrink-0">
                     <div className={`
-            h-10 w-10 rounded-full flex items-center justify-center font-mono text-xs font-bold
+            h-10 w-10 rounded-full flex flex-none items-center justify-center font-mono text-xs font-bold
             ${isError
                             ? 'bg-destructive/20 text-destructive border-2 border-destructive'
                             : isSuccess
@@ -62,6 +62,9 @@ export function TimelineStepCard({
           `}>
                         {String(index + 1).padStart(2, '0')}
                     </div>
+                    <div id='dots' className='grow py-4 flex'>
+                        <div className='dots right grow shrink'></div>
+                        <div className='dots left grow shrink'></div></div>
                 </div>
 
                 {/* Content */}

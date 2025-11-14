@@ -1,5 +1,5 @@
 // app/_lib/simulation/react-agent/reflect.ts
-// FIX: Smart reflection to stop endless scroll
+// ⭐️ FIX: Simplifiziert, um "STOPP"-Halluzinationen zu verhindern ⭐️
 
 import { callOllama } from '../utils';
 import { Language, SessionState } from '../types';
@@ -17,76 +17,65 @@ export async function reflectOnProgress(
     console.log(`[REFLECT] Plan: "${plan}"`);
     console.log(`[REFLECT] Result: "${executionResult}"`);
 
-    // CRITICAL FIX: Detect endless scroll
-    const isScrollAction = executionResult.includes('scroll') || executionResult.includes('Scroll');
-    const hasScrolledRecently = sessionState.scrollCount && sessionState.scrollCount >= 2;
-
-    console.log(`[REFLECT] Is scroll action: ${isScrollAction}`);
-    console.log(`[REFLECT] Scroll count: ${sessionState.scrollCount || 0}`);
-
-    // CRITICAL FIX: Check if we have products
     const hasProducts = observation.includes('product') ||
         observation.includes('Produkt') ||
         observation.includes('🛍️') ||
         observation.includes('available');
 
-    console.log(`[REFLECT] Has products in observation: ${hasProducts}`);
+    // ⭐️ VEREINFACHTER PROMPT: 
+    // Wir entziehen dem LLM die Verantwortung, "STOPP" zu sagen.
+    // Das LLM soll nur noch qualitativ reflektieren.
+    // Die harte "STOPP"-Logik wird deterministisch in route.ts implementiert.
 
     const promptDE = `Du bist ein KI-Agent der über seinen Fortschritt reflektiert.
 
-**Original Task:**
-"${originalTask}"
-
-**Aktueller Plan:**
-"${plan}"
-
-**Observation:**
-"${observation}"
-
-**Execution Result:**
-"${executionResult}"
+**Original Task:** "${originalTask}"
+**Aktueller Plan:** "${plan}"
+**Observation:** "${observation}"
+**Execution Result:** "${executionResult}"
 
 **Session Info:**
 - Scroll count: ${sessionState.scrollCount || 0}
-- Products visible: ${hasProducts ? 'YES' : 'NO'}
-- Search submitted: ${sessionState.searchSubmitted ? 'YES' : 'NO'}
+- Products visible (laut Code): ${hasProducts ? 'YES' : 'NO'}
 - Step: ${stepNumber}
 
-**WICHTIG:**
-1. Wenn "Scroll count" >= 3 UND "Products visible" = YES → Sage: "STOPP: Jetzt Produkt auswählen!"
-2. Wenn "Scroll count" >= 5 → Sage: "STOPP: Zu viel gescrollt, keine Produkte gefunden!"
-3. Wenn Produkte sichtbar sind → Sage: "✅ Produkte gefunden, nächster Schritt: Auswählen"
-4. Wenn Plan erfolgreich ausgeführt → Sage: "Weiter mit nächstem Schritt"
-5. Wenn Plan fehlgeschlagen → Sage: "⚠️ Problem: [kurze Beschreibung]"
+**Deine Aufgabe:**
+Reflektiere in einem kurzen Satz über den letzten Schritt.
+- War die Aktion erfolgreich?
+- Passt das Ergebnis zum Plan?
+- Was ist der logische nächste Gedanke?
+
+**Beispiele:**
+- "Aktion war erfolgreich, fahre mit dem Plan fort."
+- "Ich habe gescrollt, aber immer noch keine Produkte gefunden. Ich muss vielleicht nochmal scrollen."
+- "Fehler beim Klicken, das Element war vielleicht nicht bereit. Ich versuche es nochmal oder ändere die Strategie."
+- "Produkte sind jetzt sichtbar. Nächster Schritt ist die Auswahl."
 
 Reflexion (1 kurzer Satz):`;
 
     const promptEN = `You are an AI agent reflecting on your progress.
 
-**Original Task:**
-"${originalTask}"
-
-**Current Plan:**
-"${plan}"
-
-**Observation:**
-"${observation}"
-
-**Execution Result:**
-"${executionResult}"
+**Original Task:** "${originalTask}"
+**Current Plan:** "${plan}"
+**Observation:** "${observation}"
+**Execution Result:** "${executionResult}"
 
 **Session Info:**
 - Scroll count: ${sessionState.scrollCount || 0}
-- Products visible: ${hasProducts ? 'YES' : 'NO'}
-- Search submitted: ${sessionState.searchSubmitted ? 'YES' : 'NO'}
+- Products visible (per code): ${hasProducts ? 'YES' : 'NO'}
 - Step: ${stepNumber}
 
-**IMPORTANT:**
-1. If "Scroll count" >= 3 AND "Products visible" = YES → Say: "STOP: Now select product!"
-2. If "Scroll count" >= 5 → Say: "STOP: Scrolled too much, no products found!"
-3. If products visible → Say: "✅ Products found, next step: Select"
-4. If plan executed successfully → Say: "Continue with next step"
-5. If plan failed → Say: "⚠️ Problem: [short description]"
+**Your Task:**
+Reflect on the last step in one short sentence.
+- Was the action successful?
+- Does the result match the plan?
+- What is the logical next thought?
+
+**Examples:**
+- "Action was successful, continuing with the plan."
+- "I scrolled, but still no products found. I might need to scroll again."
+- "Error during click, element might not have been ready. I will try again or change strategy."
+- "Products are now visible. Next step is to select one."
 
 Reflection (1 short sentence):`;
 
@@ -95,41 +84,9 @@ Reflection (1 short sentence):`;
     try {
         const reflection = await callOllama('llama3.2:latest', prompt, 'text');
         console.log(`[REFLECT] ✅ Reflection: ${reflection}`);
-
-        // CRITICAL FIX: Override if endless scroll detected
-        if (hasScrolledRecently && isScrollAction) {
-            if (hasProducts) {
-                const stopReflection = language === 'de'
-                    ? '🛑 STOPP: Produkte gefunden nach mehrmaligem Scrollen. Jetzt Produkt auswählen!'
-                    : '🛑 STOP: Products found after multiple scrolls. Now select product!';
-                console.warn(`[REFLECT] ⚠️ Overriding with: ${stopReflection}`);
-                return stopReflection;
-            } else if ((sessionState.scrollCount || 0) >= 5) {
-                const stopReflection = language === 'de'
-                    ? '🛑 STOPP: Zu oft gescrollt ohne Erfolg. Strategie ändern!'
-                    : '🛑 STOP: Scrolled too many times without success. Change strategy!';
-                console.warn(`[REFLECT] ⚠️ Overriding with: ${stopReflection}`);
-                return stopReflection;
-            }
-        }
-
         return reflection;
     } catch (error) {
         console.error('[REFLECT] Error:', error);
-
-        // SMART FALLBACK
-        if (hasProducts) {
-            return language === 'de'
-                ? '✅ Produkte gefunden, nächster Schritt: Auswählen'
-                : '✅ Products found, next step: Select';
-        }
-
-        if (hasScrolledRecently && isScrollAction) {
-            return language === 'de'
-                ? '⚠️ Mehrfach gescrollt, eventuell Strategie ändern'
-                : '⚠️ Scrolled multiple times, may need to change strategy';
-        }
-
         return language === 'de'
             ? 'Weiter mit nächstem Schritt'
             : 'Continue with next step';

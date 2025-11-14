@@ -41,18 +41,19 @@
 
 /* app/globals.css - Add these utilities */
 @layer utilities {
+
   /* Font Classes */
   .font-headline {
     font-family: var(--font-epilogue);
     font-weight: 900;
   }
-  
+
   .font-accent {
     font-family: var(--font-lora);
     font-weight: 600;
     font-style: italic;
   }
-  
+
   .font-body {
     font-family: var(--font-inter);
   }
@@ -158,5 +159,18 @@ html {
     transition: all .6s var(--expoOut);
     vertical-align: middle;
     width: 100%
+  }
+
+  .dots {
+    width: 50%;
+    height: 100%;
+  }
+
+  .dots.right {
+    border-right: 1px dashed black;
+  }
+
+  .dots.left {
+    border-left: 1px dashed black;
   }
 }

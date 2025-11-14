@@ -63,7 +63,7 @@ export function ExecutionTimeline({
                     {/* Header */}
                     <div className="flex -mx-16 px-16 backdrop-blur-xl bg-linear-to-t from-white from-15% to-white/0 justify-between items-center pt-16 pb-8 -mt-8 mb-8 border-b-2 sticky top-8 z-9999">
                         <div className='flex gap-4 items-center'>
-                            <Birdhouse className="h-8 w-8 text-black" />
+                            <Birdhouse className="h-10 w-10 text-black" />
                             <p className="text-xs font-medium text-muted-foreground font-headline">
                                 EXECUTION TIMELINE
                             </p>

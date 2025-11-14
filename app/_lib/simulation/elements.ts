@@ -26,6 +26,7 @@ function getRole(tagName: string, el: any): 'link' | 'button' | 'textbox' {
     const role = el.role;
 
     if (tagName === 'a' || role === 'link') return 'link';
+    // ⭐️ FIX: Tippfehler '===a ===' korrigiert zu '==='
     if (tagName === 'input' || tagName === 'textarea' || role === 'searchbox' || role === 'textbox') return 'textbox';
 
     // Alles andere, was klickbar ist, ist ein 'button'
@@ -48,6 +49,13 @@ function calculatePriority(
         if (p.includes('such') || p.includes('search') || p.includes('wonach')) {
             // ⭐️ KORREKTUR: Suchfeld ist auf Ergebnisseiten WENIGER wichtig
             score = onSearchResults ? 3000 : 5000;
+        }
+    }
+
+    // ⭐️ NEU: Priorisiere gängige Filter/Such-Buttons auf Startseiten
+    if (!onSearchResults && role === 'button') {
+        if (t.includes('fahrzeugsuche') || t.includes('modelle') || t.includes('filter') || t.includes('suchen')) {
+            score = 4000; // Hoch, aber niedriger als ein echtes Such-TEXTFELD (5000)
         }
     }
 
