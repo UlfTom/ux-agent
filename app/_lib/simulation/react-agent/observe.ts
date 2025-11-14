@@ -1,5 +1,5 @@
 // app/_lib/simulation/react-agent/observe.ts
-// FIX: Vision-based product detection + Code-based fallback
+// ⭐️ KORRIGIERTER FIX: Verwendet jetzt den korrekten Prio-Score (6000) ⭐️
 
 import { Page } from 'playwright';
 import { callOllama } from '../utils';
@@ -24,19 +24,20 @@ export async function observeCurrentState(
     // CRITICAL FIX: Detect context
     const isOnSearchResults = currentUrl.includes('/suche/') || currentUrl.includes('/search/');
 
-    // CRITICAL FIX: Count product links (HIGH priority >= 800)
+    // ⭐️ KORREKTUR: Filtert nach 6000, nicht 800
     const productLinks = elements.filter(e =>
         e.role === 'link' &&
         e.priorityScore &&
-        e.priorityScore >= 800
+        e.priorityScore >= 6000 // ⭐️ WAR 800, MUSS 6000 SEIN
     );
 
     console.log(`[OBSERVE] Is on search results: ${isOnSearchResults}`);
-    console.log(`[OBSERVE] Product links found: ${productLinks.length}`);
+    console.log(`[OBSERVE] Product links found (Prio >= 6000): ${productLinks.length}`);
 
     // Build element summary (Top 10 products + 5 other)
-    const topProducts = elements.filter(e => e.priorityScore && e.priorityScore >= 800).slice(0, 10);
-    const otherElements = elements.filter(e => !e.priorityScore || e.priorityScore < 800).slice(0, 5);
+    // ⭐️ KORREKTUR: Filtert nach 6000, nicht 800
+    const topProducts = elements.filter(e => e.priorityScore && e.priorityScore >= 6000).slice(0, 10);
+    const otherElements = elements.filter(e => !e.priorityScore || e.priorityScore < 6000).slice(0, 5); // ⭐️ War 800
     const relevantElements = [...topProducts, ...otherElements];
 
     const elementSummary = relevantElements.map(e =>
@@ -49,7 +50,7 @@ export async function observeCurrentState(
 Anzahl: ${productLinks.length}
 Top 3:
 ${productLinks.slice(0, 3).map((p, i) => `${i + 1}. [ID ${p.id}] "${p.text.substring(0, 50)}"`).join('\n')}
-` : `⚠️ **KEINE PRODUKTE** im Code gefunden (priority >= 800)`;
+` : `⚠️ **KEINE PRODUKTE** im Code gefunden (priority >= 6000)`; // ⭐️ War 800
 
     const promptDE = `Du bist ein KI-Shopping-Agent der Produkte auswählen soll.
 
@@ -146,9 +147,9 @@ Describe what you see (2-4 sentences, incl. product selection if possible):`;
             }
         } else if (isOnSearchResults) {
             if (language === 'de') {
-                return `⚠️ Ich sehe die Suchergebnisseite, aber der Code findet keine Produkte (priority >= 800). Möglicherweise muss ich scrollen oder die Seite ist noch am Laden.`;
+                return `⚠️ Ich sehe die Suchergebnisseite, aber der Code findet keine Produkte (priority >= 6000). Möglicherweise muss ich scrollen oder die Seite ist noch am Laden.`; // ⭐️ War 800
             } else {
-                return `⚠️ I see the search results page, but the code finds no products (priority >= 800). May need to scroll or page is still loading.`;
+                return `⚠️ I see the search results page, but the code finds no products (priority >= 6000). May need to scroll or page is still loading.`; // ⭐️ War 800
             }
         } else {
             if (language === 'de') {

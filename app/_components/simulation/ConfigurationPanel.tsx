@@ -145,6 +145,19 @@ export function ConfigurationPanel({
 
                     {/* Persona Type */}
                     <div className=" space-y-2 relative w-full">
+                        <Label htmlFor="personaType" className="font-display">Accessible Type</Label>
+                        <Select value="Keine Einschränkung" disabled>
+                            <SelectTrigger className="h-12">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Currently locked</p>
+                    </div>
+
+                    {/* Persona Type */}
+                    <div className=" space-y-2 relative w-full">
                         <Label htmlFor="personaType" className="font-display">Persona Type</Label>
                         <Select value={personaType} onValueChange={setPersonaType} disabled>
                             <SelectTrigger className="h-12">

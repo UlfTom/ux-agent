@@ -61,7 +61,7 @@ export function ExecutionTimeline({
             {log.length > 0 ? (
                 <div className="space-y-3">
                     {/* Header */}
-                    <div className="flex -mx-6 bg-linear-to-t from-white from-15% to-white/0 justify-between items-center pt-16 pb-8 -mt-16 mb-8 border-b-2 sticky top-8 z-9999">
+                    <div className="flex -mx-16 px-16 backdrop-blur-xl bg-linear-to-t from-white from-15% to-white/0 justify-between items-center pt-16 pb-8 -mt-8 mb-8 border-b-2 sticky top-8 z-9999">
                         <div className='flex gap-4 items-center'>
                             <Birdhouse className="h-8 w-8 text-black" />
                             <p className="text-xs font-medium text-muted-foreground font-headline">
@@ -70,11 +70,11 @@ export function ExecutionTimeline({
                         </div>
 
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handleCopyLog} className="gap-2 bg-white">
+                            <Button variant="outline" size="sm" onClick={handleCopyLog} className="gap-2">
                                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                                 {copied ? 'Copied' : 'Copy'}
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleDownloadZip} className="gap-2 bg-white">
+                            <Button variant="outline" size="sm" onClick={handleDownloadZip} className="gap-2">
                                 <Download className="h-4 w-4" />
                                 Export
                             </Button>
@@ -109,7 +109,7 @@ export function ExecutionTimeline({
                                     <div className="h-px flex-1 bg-border" /><span>ENDE</span><div className="h-px flex-1 bg-border" />
                                 </div>
                                 {/* Summary Card */}
-                                <Card className="border-2 shadow-lg overflow-hidden">
+                                <Card className="border-2 pb-8 shadow-lg overflow-hidden">
                                     <div className="p-6 text-white" style={{ background: `linear-gradient(to right, #6366f1, #a855f7, #ec4899)` }}>
                                         <div className="flex items-center gap-3 mb-2">
                                             {hasSuccess ? <CheckCircle2 className="h-8 w-8" /> : errorCount > 0 ? <XCircle className="h-8 w-8" /> : <AlertCircle className="h-8 w-8" />}

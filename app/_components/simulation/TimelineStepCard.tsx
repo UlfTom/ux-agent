@@ -67,21 +67,22 @@ export function TimelineStepCard({
                 {/* Content */}
                 <div className="flex-1 pb-6">
                     <Card className={`p-0 ${isError ? 'border-destructive/50 bg-destructive/5' : ''} shadow-sm overflow-hidden`}>
-                        <CardHeader className="border-b-2 p-0 m-0">
-                            <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: 'auto' }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="overflow-hidden p-0 m-0"
-                            >
-                                <img
-                                    src={`data:image/png;base64,${step.image}`}
-                                    alt={step.step}
-                                    className="w-full h-full object-cover"
-                                />
-                            </motion.div>
-                        </CardHeader>
+                        {step.image &&
+                            <CardHeader className="border-b-2 p-0 m-0">
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden p-0 m-0"
+                                >
+                                    <img
+                                        src={`data:image/png;base64,${step.image}`}
+                                        alt={step.step}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </motion.div>
+                            </CardHeader>}
                         <CardContent className="px-6 pt-4 pb-8">
 
                             {/* Header */}
