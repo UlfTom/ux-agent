@@ -61,20 +61,20 @@ export function ExecutionTimeline({
             {log.length > 0 ? (
                 <div className="space-y-3">
                     {/* Header */}
-                    <div className="flex -mx-6 justify-between pb-3 border-b-2 sticky top-32">
-                        <>
+                    <div className="flex -mx-6 bg-linear-to-t from-white from-15% to-white/0 justify-between items-center pt-16 pb-8 -mt-16 mb-8 border-b-2 sticky top-8 z-9999">
+                        <div className='flex gap-4 items-center'>
                             <Birdhouse className="h-8 w-8 text-black" />
-                            <p className="text-xs font-medium text-muted-foreground font-mono">
+                            <p className="text-xs font-medium text-muted-foreground font-headline">
                                 EXECUTION TIMELINE
                             </p>
-                        </>
+                        </div>
 
                         <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handleCopyLog} className="gap-2">
+                            <Button variant="outline" size="sm" onClick={handleCopyLog} className="gap-2 bg-white">
                                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                                 {copied ? 'Copied' : 'Copy'}
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleDownloadZip} className="gap-2">
+                            <Button variant="outline" size="sm" onClick={handleDownloadZip} className="gap-2 bg-white">
                                 <Download className="h-4 w-4" />
                                 Export
                             </Button>
@@ -170,7 +170,7 @@ export function ExecutionTimeline({
             ) : (
                 <div className="flex flex-col items-center justify-center text-center text-muted-foreground">
                     <Birdhouse className="h-8 w-8 text-black" />
-                    <p>Starte eine neue Simulation um Ergebnisse zu sehen.</p>
+                    <p>{task} auf {url.split("www.")[1]}.</p>
                 </div>
             )}
         </>

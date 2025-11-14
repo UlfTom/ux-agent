@@ -1,5 +1,5 @@
 // app/_lib/simulation/react-agent/verify.ts
-// ⭐️ NEUE VERSION MIT GENERISCHEN LEITPLANKEN & ROLLEN-BASIERTER SUCHE ⭐️
+// ⭐️ NEUE GENERISCHE VERSION (OHNE GOLDENE REGEL) ⭐️
 
 import { callOllama } from '../utils';
 import { InteractableElement, SessionState, Language, PersonaType } from '../types';
@@ -32,56 +32,21 @@ export async function verifyPlanMatch(
     personaType: PersonaType,
     language: Language = 'de'
 ): Promise<VerificationResult> {
-    console.log(`[VERIFY] Matching plan: "${plan}"`);
+
+    console.log(`[VERIFY] Generische Verifizierung. Plan: "${plan}"`);
     console.log(`[VERIFY] Kontext: SearchSubmitted=${sessionState.searchSubmitted}, OnResults=${sessionState.onSearchResults}, OnPDP=${sessionState.onProductPage}`);
 
-    // ⭐️⭐️ GOLDENE REGEL (ROLLEN-BASIERT) ⭐️⭐️
-    const planLower = plan.toLowerCase();
-    const wantsSearch = planLower.includes('such') || planLower.includes('search');
-
-    // Nur ausführen, wenn wir auf der Startseite sind
-    if (wantsSearch && !sessionState.onSearchResults && !sessionState.onProductPage) {
-        const searchElement = elements.find(e => e.priorityScore && e.priorityScore >= 5000); // 5000 = Prio für Suchleisten
-
-        if (searchElement) {
-            console.log(`[VERIFY] ⭐️ Golden Rule: Plan will search, Search-Element [ID ${searchElement.id}] found!`);
-
-            // ⭐️ FIX (AIRBNB): Prüfe die ROLLE des Such-Elements
-            if (searchElement.role === 'textbox') {
-                // FÜR OTTO/AMAZON: Direkte Eingabe
-                const searchTerm = await extractSearchTerm(task, language);
-                console.log(`[VERIFY] Element is 'textbox'. Typing: "${searchTerm}"`);
-                // Gedächtnis setzen
-                sessionState.searchSubmitted = true;
-                return {
-                    match: true, confidence: 1.0, action: 'type',
-                    elementId: searchElement.id,
-                    textToType: searchTerm,
-                    rationale: `Heuristik: Plan will suchen, Element ist Textbox. Führe 'type' aus mit: "${searchTerm}".`
-                };
-            } else {
-                // FÜR AIRBNB: Zuerst klicken, um Suche zu öffnen
-                console.log(`[VERIFY] Element is '${searchElement.role}'. Clicking to open search.`);
-                // Gedächtnis HIER NOCH NICHT setzen, da die Suche noch nicht abgeschickt ist.
-                return {
-                    match: true, confidence: 1.0, action: 'click',
-                    elementId: searchElement.id,
-                    rationale: `Heuristik: Plan will suchen, Element ist Klick-basiert ('${searchElement.role}'). Führe 'click' aus.`
-                };
-            }
-        }
-    }
-    // ⭐️⭐️ ENDE GOLDENE REGEL ⭐️⭐️
-
-    console.log(`[VERIFY] Golden Rule not applied. Using LLM for verification...`);
+    // ⭐️ GOLDENE REGEL WURDE ENTFERNT, WIR VERTRAUEN DER KI ⭐️
+    // (Die "Goldene Regel" war der Grund für den Airbnb-Fehler in Debug 57/59)
 
     const productLinks = elements.filter(e => e.priorityScore && e.priorityScore >= 6000); // 6000 = Prio für Produkte
     console.log(`[VERIFY] Produkt-Links mit Prio >= 6000 gefunden: ${productLinks.length}`);
 
-    const elementList = elements.slice(0, 30).map(e => // Sende Top 30
+    const elementList = elements.slice(0, 30).map(e => // ⭐️ Sende mehr Elemente (Top 30)
         `[ID ${e.id}] ${e.role}: "${e.text.substring(0, 50)}" (priority: ${e.priorityScore || 0})`
     ).join('\n');
 
+    // ⭐️ FIX (LEITPLANKEN & GENERISCH): Persona-Typ wird in den Prompt injiziert
     const promptDE = `Du bist ein Verifikations-Agent.
 
 **DEINE PERSONA (DEINE LEITPLANKEN):**
@@ -120,20 +85,22 @@ ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`)
 
 **WICHTIGE GENERISCHE REGELN:**
 
-1.  **KONTEXT (ERGEBNISSEITE):**
+1.  **KONTEXT (STARTSEITE):**
+    - Wenn 'Auf Ergebnisseite' **false** UND 'Auf Detailseite' **false** ist:
+    - Finde das Such-Element (z.B. [ID 0] "Wonach suchst du?").
+    - **REGEL (OTTO):** Wenn es eine \`textbox\` ist -> \`action: "type"\`, \`textToType: "..."\` (extrahiere Begriffe aus Task).
+    - **REGEL (AIRBNB):** Wenn es ein \`button\` "Wohin?" ist -> \`action: "click"\` auf [ID 0] "Wohin?".
+    - **REGEL (AIRBNB DATUM):** Wenn die Aufgabe "Silvester" enthält, ist nach dem Klick auf "Wohin?" der nächste Schritt \`click\` auf "Check-in" oder "Datum".
+
+2.  **KONTEXT (ERGEBNISSEITE):**
     - Wenn 'Auf Ergebnisseite' **true** ist:
     - **GEBOT:** \`action: "click"\` auf das beste Produkt-Link [ID X] (Priorität >= 6000), das zu Task UND Persona passt.
     - (z.B. Für "Winter-Jeans" ist "Thermo" oder "Gefüttert" besser als "Skinny").
     - (Fallback: \`action: "scroll"\` wenn nichts passt).
 
-2.  **KONTEXT (DETAILSEITE/PDP):**
+3.  **KONTEXT (DETAILSEITE/PDP):**
     - Wenn 'Auf Detailseite' **true** ist:
-    - **GEBOT:** Finde und klicke auf die logische nächste Aktion (z.B. "In den Warenkorb", "Größe auswählen", "Jetzt buchen", "Datum auswählen").
-
-3.  **KONTEXT (STARTSEITE / SONSTIGES):**
-    - Wenn 'Auf Ergebnisseite' **false** UND 'Auf Detailseite' **false** ist:
-    - Führe den Plan aus, um die Suche zu starten (z.B. \`click\` auf "Wohin?" oder \`type\` in "Suche").
-    - FÜR TASK "Unterkunft für Silvester": Wenn der Plan "Suchen" ist, ist \`click\` auf "Check-in" oder "Datum" ein logischer nächster Schritt, WENN "Wohin?" schon geklickt wurde.
+    - **GEBOT:** Finde und klicke auf die logische nächste Aktion (z.B. "In den Warenkorb", "Größe auswählen", "Jetzt buchen").
 `;
 
     const prompt = promptDE;
@@ -141,7 +108,7 @@ ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`)
     try {
         const response = await callOllama('llama3.2:latest', prompt, undefined, language, undefined);
 
-        const jsonMatch = response.match(/\{[\sS]*\}/);
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (!jsonMatch || !jsonMatch[0]) {
             if (response.toLowerCase().includes('scroll')) {
                 return { match: true, confidence: 0.6, action: 'scroll', scrollDirection: 'down', rationale: `Fallback: KI hat 'scroll' vorgeschlagen. (${response})` };
@@ -165,11 +132,13 @@ ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`)
             }
         }
 
-        // Wenn die KI 'type' wählt, extrahiere den Suchbegriff (falls die Goldene Regel nicht gegriffen hat)
+        // ⭐️ WICHTIG: Wenn die KI 'type' wählt, extrahiere den Suchbegriff
         if (parsed.action === 'type' && !parsed.textToType && !sessionState.searchSubmitted) {
             parsed.textToType = await extractSearchTerm(task, language);
             parsed.rationale += ` (Suchbegriff extrahiert: "${parsed.textToType}")`;
-            sessionState.searchSubmitted = true; // Gedächtnis auch hier setzen
+            // Setze Gedächtnis HIER, da die Aktion bestätigt ist
+            sessionState.searchSubmitted = true;
+            console.log(`[VERIFY] 🧠 Gedächtnis: Suche wird abgeschickt.`);
         }
 
         return {

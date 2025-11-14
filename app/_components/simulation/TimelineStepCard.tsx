@@ -48,7 +48,7 @@ export function TimelineStepCard({
                 <div className="absolute left-[19px] top-[40px] bottom-[-12px] w-[2px] bg-border" />
             )}
 
-            <div className="flex gap-4">
+            <div className="flex flex-col gap-4">
                 {/* Timeline Dot */}
                 <div className="relative flex-shrink-0">
                     <div className={`
@@ -73,12 +73,12 @@ export function TimelineStepCard({
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: 0.2 }}
-                                className="overflow-hidden max-h-60"
+                                className="overflow-hidden p-0 m-0"
                             >
                                 <img
                                     src={`data:image/png;base64,${step.image}`}
                                     alt={step.step}
-                                    className="w-full"
+                                    className="w-full h-full object-cover"
                                 />
                             </motion.div>
                         </CardHeader>

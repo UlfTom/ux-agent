@@ -1,12 +1,11 @@
 // app/api/run-simulation/route.ts
-// ⭐️ KORRIGIERTE VERSION (FIX FÜR ALLE TYPESCRIPT-FEHLER) ⭐️
+// ⭐️ KORRIGIERTE FINALE VERSION (SAUBER) ⭐️
 
 import { NextRequest } from 'next/server';
 import { launchBrowser, updateSessionState, checkAndDismissCookie } from '@/app/_lib/simulation/browser';
 import { getInteractableElements } from '@/app/_lib/simulation/elements';
 import { annotateImage } from '@/app/_lib/simulation/vision';
-// import { generatePersona } from '@/app/_lib/simulation/persona'; // NICHT MEHR LIVE GENERIEREN
-import { pragmaticPersonaDE } from '@/app/_lib/simulation/persona-cache'; // ⭐️ NEU: Persona-Pool
+import { pragmaticPersonaDE } from '@/app/_lib/simulation/persona-cache';
 import { getPlan } from '@/app/_lib/simulation/react-agent/plan';
 import { observeCurrentState } from '@/app/_lib/simulation/react-agent/observe';
 import { verifyPlanMatch } from '@/app/_lib/simulation/react-agent/verify';
@@ -18,7 +17,6 @@ import { LogStep, SessionState, Language, PersonaType, InteractableElement } fro
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-    // ⭐️ FIX: debugMode im Typ hinzugefügt
     const { url, task, browserType, clickDepth, domain, personaType, language, debugMode = true } = await request.json() as {
         url: string;
         task: string;
@@ -27,7 +25,7 @@ export async function POST(request: NextRequest) {
         domain: string;
         personaType: PersonaType;
         language?: Language;
-        debugMode?: boolean; // ⭐️ NEU: Debug-Flag
+        debugMode?: boolean;
     };
 
     const lang: Language = language || 'de';
@@ -48,7 +46,6 @@ export async function POST(request: NextRequest) {
                 searchFieldPosition: 'unknown', scrollCount: 0, consecutiveScrolls: 0
             };
 
-            // ⭐️ FIX: Alle ReAct-Variablen hier mit 'let' deklarieren
             let plan: string = "";
             let observation: string = "";
             let verification: any = {};
@@ -57,14 +54,12 @@ export async function POST(request: NextRequest) {
             let elements: InteractableElement[] = [];
             let screenshotBuffer: Buffer;
             let annotated: string | null = null;
-            // const timings_ms: Record<string, number> = {}; // HINWEIS: timings_ms ist pro Schritt
 
             try {
                 console.log(`[START] Simulation for ${url} (Debug: ${debugMode})`);
                 sendSSE(controller, { type: 'progress', value: 10, status: lang === 'de' ? 'Lade Persona...' : 'Loading persona...' });
 
-                // ⭐️ FIX: Persona aus Cache laden statt live generieren
-                const personaPrompt = pragmaticPersonaDE; // Spart ~45 Sekunden
+                const personaPrompt = pragmaticPersonaDE;
                 console.log(`[PERSONA] Loaded from cache`);
 
                 const personaLines = personaPrompt.split('\n').filter(l => l.trim());
@@ -88,7 +83,6 @@ export async function POST(request: NextRequest) {
                 updateSessionState(page, sessionState);
                 console.log(`[LOADED] ${sessionState.currentUrl}`);
 
-                // Step 1: Start
                 if (debugMode) {
                     const startStep: LogStep = {
                         step: "Schritt 1 (Start)",
@@ -100,7 +94,6 @@ export async function POST(request: NextRequest) {
                     sendSSE(controller, { type: 'step', step: startStep, progress: 35 });
                 }
 
-                // Step 1.5: Cookie
                 const cookieLogs: string[] = [];
                 const dismissed = await checkAndDismissCookie(page, cookieLogs);
                 if (dismissed && debugMode) {
@@ -120,7 +113,7 @@ export async function POST(request: NextRequest) {
                     const progress = 40 + Math.round((i / maxSteps) * 50);
                     const stepName = `Schritt ${i + 2}/${maxSteps + 2}`;
                     const stepLogs: string[] = [];
-                    const step_timings_ms: Record<string, number> = {}; // Timings für diesen Schritt
+                    const step_timings_ms: Record<string, number> = {};
                     let stepStart = Date.now();
 
                     console.log(`\n[STEP ${i + 1}/${maxSteps}] ReAct Loop Starting...`);
@@ -132,7 +125,6 @@ export async function POST(request: NextRequest) {
                     // 1️⃣ PLAN
                     stepStart = Date.now();
                     try {
-                        // ⭐️ FIX: 'const' entfernt
                         plan = await getPlan(task, personaPrompt, personaType, sessionState, page.url(), lang);
                         step_timings_ms.plan = Date.now() - stepStart;
                         console.log(`[STEP ${i + 1}] Plan: "${plan}" (${step_timings_ms.plan}ms)`);
@@ -146,27 +138,24 @@ export async function POST(request: NextRequest) {
 
                     // 2️⃣ OBSERVE
                     stepStart = Date.now();
-                    annotated = null; // Zurücksetzen
+                    annotated = null;
                     try {
-                        // ⭐️ FIX: 'const' entfernt
                         screenshotBuffer = await page.screenshot({ type: 'png' });
 
-                        // ⭐️ FIX: 'const' entfernt UND 'onSearchResults' übergeben
+                        // ⭐️ KORREKTUR: 'onSearchResults' wird übergeben
                         elements = await getInteractableElements(page, sessionState.onSearchResults);
                         console.log(`[STEP ${i + 1}] Found ${elements.length} elements (OnSearchResults: ${sessionState.onSearchResults})`);
 
                         if (debugMode) {
-                            // ⭐️ FIX: 'const' entfernt
                             annotated = await annotateImage(screenshotBuffer, elements);
                         }
 
-                        // ⭐️ FIX: 'const' entfernt
                         observation = await observeCurrentState(page, plan, elements, annotated || screenshotBuffer.toString('base64'), lang);
 
                         step_timings_ms.observe = Date.now() - stepStart;
-                        // ⭐️ FIX: Doppelte Zeilen entfernt
                         stepLogs.push(` 📊 Gefunden: ${elements.length} Elemente`);
-                        stepLogs.push(` 👀 Observation: "${observation.substring(0, 100)}..."`); // Gekürzt für saubere Logs
+                        stepLogs.push(` 🎯 Top 5: ${elements.slice(0, 5).map(e => `[${e.id}:${e.role}:${e.text?.substring(0, 20) || 'no-text'}] (Prio: ${e.priorityScore})`).join(', ')}`);
+                        stepLogs.push(` 👀 Observation: "${observation.substring(0, 100)}..."`);
                         stepLogs.push(` ⏱️ Observe (inkl. Screenshot/Elements): ${step_timings_ms.observe}ms`);
                     } catch (error: any) {
                         stepLogs.push(` ❌ Observation Error: ${error.message}`);
@@ -177,9 +166,7 @@ export async function POST(request: NextRequest) {
                     // 3️⃣ VERIFY
                     stepStart = Date.now();
                     try {
-                        // ⭐️ FIX: 'const' entfernt
-                        verification = await verifyPlanMatch(plan, observation, elements, sessionState, task, personaType, lang); // ⭐️ HIER HINZUGEFÜGT
-
+                        verification = await verifyPlanMatch(plan, observation, elements, sessionState, task, personaType, lang);
                         step_timings_ms.verify = Date.now() - stepStart;
                         console.log(`[STEP ${i + 1}] Verify: ${verification.action} (${step_timings_ms.verify}ms)`);
                         stepLogs.push(` 🎬 Action: ${verification.action}${verification.elementId !== undefined ? ` [ID ${verification.elementId}]` : ''}`);
@@ -194,7 +181,6 @@ export async function POST(request: NextRequest) {
                     // 4️⃣ EXECUTE
                     stepStart = Date.now();
                     try {
-                        // ⭐️ FIX: 'const' entfernt
                         result = await executeAction(verification, page, elements, task, personaType);
                         step_timings_ms.execute = Date.now() - stepStart;
                         console.log(`[STEP ${i + 1}] Execute: "${result}" (${step_timings_ms.execute}ms)`);
@@ -206,14 +192,8 @@ export async function POST(request: NextRequest) {
                         console.error(`[STEP ${i + 1}] Execution error:`, error);
                     }
 
-                    // ⭐️ KORREKTUR: "Gedächtnis" wird jetzt generisch gesetzt
-                    if (verification.rationale && verification.rationale.includes("Heuristik: Plan will suchen")) {
-                        sessionState.searchSubmitted = true;
-                        console.log(`[ROUTE] 🧠 Gedächtnis: Suche wurde (via Heuristik) abgeschickt.`);
-                        stepLogs.push(` 🧠 Gedächtnis: Suche abgeschickt.`);
-                    }
+                    // ⭐️ "Gedächtnis"-Logik ist jetzt in verify.ts, hier nicht mehr nötig
 
-                    // Scroll-Zählung
                     if (verification.action === 'scroll') {
                         sessionState.scrollCount = (sessionState.scrollCount || 0) + 1;
                         sessionState.consecutiveScrolls = (sessionState.consecutiveScrolls || 0) + 1;
@@ -222,12 +202,11 @@ export async function POST(request: NextRequest) {
                         sessionState.consecutiveScrolls = 0;
                     }
                     await page.waitForTimeout(800);
-                    updateSessionState(page, sessionState);
+                    updateSessionState(page, sessionState); // WICHTIG: Kontext für nächsten Loop aktualisieren
 
                     // 5️⃣ REFLECT
                     stepStart = Date.now();
                     try {
-                        // ⭐️ FIX: 'const' entfernt
                         reflection = await reflectOnProgress(plan, observation, result, sessionState, task, i + 1, lang);
                         step_timings_ms.reflect = Date.now() - stepStart;
                         console.log(`[STEP ${i + 1}] Reflect: "${reflection}" (${step_timings_ms.reflect}ms)`);
@@ -249,7 +228,7 @@ export async function POST(request: NextRequest) {
                         observation,
                         verification,
                         reflection,
-                        timings_ms: step_timings_ms // ⭐️ NEU: Timings
+                        timings_ms: step_timings_ms
                     };
                     structuredLog.push(currentStep);
                     sendSSE(controller, { type: 'step', step: currentStep });

@@ -48,7 +48,7 @@ Du bist ein universeller User-Agent. Du weißt NICHT, auf welcher Art von Websit
    - **Ziel:** Das beste Ergebnis anhand der Persona-Leitplanken finden.
    - **Aktion:** Scanne die sichtbaren Ergebnisse.
    - **Entscheidung:** "Passendes Produkt/Listing auswählen."
-   - **Fallback:** Wenn nichts passt -> "scrollen".
+   - **Fallback:** Wenn nichts passt oder du mehr Auswahl brauchst -> "scrollen".
 
 3. **Wenn 'Auf Detailseite' true ist:**
    - **Ziel:** Die Aufgabe abschließen (Kauf/Buchung).

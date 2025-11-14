@@ -1,8 +1,8 @@
 // app/_lib/simulation/browser.ts
-// ⭐️ ROBUSTERE VERSION ⭐️
+// ⭐️ KORRIGIERTE VERSION (GENERISCHER COOKIE-FIX & KONTEXT) ⭐️
 
 import { chromium, firefox, webkit, Browser, Page } from 'playwright';
-import type { SessionState } from './types'; // Importiere SessionState
+import type { SessionState } from './types'; // Typen importieren
 
 export async function launchBrowser(
     browserType: 'chrome' | 'firefox' | 'safari'
@@ -21,43 +21,52 @@ export async function checkAndDismissCookie(
     page: Page,
     logs: string[]
 ): Promise<boolean> {
-    try {
-        // ⭐️ KORREKTUR: Gezielte, dumme Suche nach Cookie-Buttons.
-        // Unabhängig von elements.ts!
 
-        // Versuch 1: Der "OK" Button von OTTO
-        const ottoButton = page.getByRole('button', { name: 'OK', exact: true });
-        if (await ottoButton.isVisible({ timeout: 1500 })) {
-            logs.push('🍪 Cookie-Banner (OTTO) gefunden! Klicke "OK"...');
-            await ottoButton.click({ timeout: 3000, force: true });
-            await page.waitForTimeout(1000);
-            logs.push('✓ Cookie dismissed (OTTO)');
-            return true;
+    // ⭐️ GENERISCHER COOKIE-CHECK (Version 3)
+    // Priorisiert "Alle akzeptieren" über "OK"
+
+    const acceptRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all)$/i;
+    const okRegex = /^(Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it|Ich stimme zu)$/i;
+
+    for (let i = 0; i < 2; i++) { // 2 Versuche
+        try {
+            // VERSUCH 1: Finde "Alle akzeptieren" (Beste Option)
+            const acceptButton = page.getByRole('button', { name: acceptRegex }).first();
+            if (await acceptButton.isVisible({ timeout: 1500 })) {
+                logs.push(`🍪 Generischer Cookie-Banner gefunden! Klicke "${await acceptButton.textContent()}"...`);
+                await acceptButton.click({ timeout: 3000, force: true });
+                await page.waitForTimeout(1000);
+                logs.push('✓ Cookie dismissed (Alle akzeptieren)');
+                return true;
+            }
+
+            // VERSUCH 2: Finde "OK" (Fallback, z.B. für Otto)
+            const okButton = page.getByRole('button', { name: okRegex }).first();
+            if (await okButton.isVisible({ timeout: 1000 })) {
+                logs.push(`🍪 Cookie-Banner (Fallback) gefunden! Klicke "${await okButton.textContent()}"...`);
+                await okButton.click({ timeout: 3000, force: true });
+                await page.waitForTimeout(1000);
+                logs.push('✓ Cookie dismissed (OK/Akzeptieren)');
+                return true;
+            }
+
+        } catch (e: any) {
+            if (!e.message.includes('Timeout')) {
+                logs.push(`⚠️ Cookie-Check-Fehler: ${e.message.split('\n')[0]}`);
+            }
         }
-
-        // Versuch 2: Generisches Regex (wie für Airbnb)
-        const genericRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all|Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it|Ich stimme zu)$/i;
-        const genericButton = page.getByRole('button', { name: genericRegex }).first();
-        if (await genericButton.isVisible({ timeout: 1000 })) {
-            logs.push('🍪 Generischer Cookie-Banner gefunden! Klicke...');
-            await genericButton.click({ timeout: 3000, force: true });
-            await page.waitForTimeout(1000);
-            logs.push('✓ Cookie dismissed (Generisch)');
-            return true;
-        }
-
-    } catch (e: any) {
-        logs.push(`⚠️ Cookie-Check-Fehler: ${e.message.split('\n')[0]}`);
+        if (i === 0) await page.waitForTimeout(1000); // Kurze Pause vor 2. Versuch
     }
+
     logs.push('ℹ️ Kein Cookie-Banner gefunden oder geklickt.');
     return false;
 }
 
-export function updateSessionState(page: Page, sessionState: SessionState) { // Typen korrekt verwenden
+// ⭐️ AKTUALISIERT mit besserer Seitenerkennung
+export function updateSessionState(page: Page, sessionState: SessionState) {
     const currentUrl = page.url();
     sessionState.currentUrl = currentUrl;
 
-    // ⭐️ BESSERE GENERISCHE ERKENNUNG
     // Zuerst auf PDP prüfen (spezifischer)
     if (currentUrl.includes('/p/') || // Otto
         currentUrl.includes('/produkt/') || // Universal
