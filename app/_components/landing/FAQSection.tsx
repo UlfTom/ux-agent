@@ -179,7 +179,7 @@ export function FAQSection() {
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: index * 0.05 }}
-                                className="border border-border rounded-2xl overflow-hidden bg-background/50 backdrop-blur-sm hover:border-primary/50 transition-all"
+                                className="border border-border rounded-xl overflow-hidden bg-background/50 backdrop-blur-sm hover:border-primary/50 transition-all"
                             >
                                 <button
                                     onClick={() => setOpenIndex(isOpen ? null : index)}
@@ -221,7 +221,7 @@ export function FAQSection() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.3 }}
-                    className="text-center mt-16 p-8 rounded-2xl bg-muted/30 backdrop-blur-sm border border-border"
+                    className="text-center mt-16 p-8 rounded-xl bg-muted/30 backdrop-blur-sm border border-border"
                 >
                     <h3 className="text-xl font-semibold mb-2">Noch Fragen?</h3>
                     <p className="text-muted-foreground mb-4">

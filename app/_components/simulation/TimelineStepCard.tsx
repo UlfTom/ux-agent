@@ -1,10 +1,8 @@
 // app/simulation/_components/simulation/TimelineStepCard.tsx
 "use client";
 
-import React, { useState } from 'react';
-import { Button } from "@/app/_components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/_components/ui/card";
-import { Clock, CheckCircle2, XCircle, AlertCircle, ImageUp, ImageDown } from "lucide-react";
+import { Clock } from "lucide-react";
 import { motion } from 'framer-motion';
 import { LogStep } from '@/app/_lib/simulation/types'; // ⭐️ WICHTIG: Importiert den globalen Typ
 
@@ -52,7 +50,7 @@ export function TimelineStepCard({
                 {/* Timeline Dot */}
                 <div className="flex flex-col relative flex-shrink-0">
                     <div className={`
-            h-10 w-10 rounded-full flex flex-none items-center justify-center font-mono text-xs font-bold
+            h-8 w-8 rounded-full flex flex-none items-center justify-center font-mono text-xs font-bold
             ${isError
                             ? 'bg-destructive/20 text-destructive border-2 border-destructive'
                             : isSuccess

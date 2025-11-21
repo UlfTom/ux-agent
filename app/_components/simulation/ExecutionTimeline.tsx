@@ -61,9 +61,8 @@ export function ExecutionTimeline({
             {log.length > 0 ? (
                 <div className="space-y-3">
                     {/* Header */}
-                    <div className="flex -mx-16 px-16 backdrop-blur-xl bg-linear-to-t from-white from-15% to-white/0 justify-between items-center pt-16 pb-8 -mt-8 mb-8 border-b-2 sticky top-8 z-9999">
+                    <div className="flex -mx-16 px-16 backdrop-blur-xl bg-linear-to-t from-white from-15% to-white/0 justify-between items-center pt-16 pb-8 -mt-8 mb-8 border-b-2 sticky top-4 z-9">
                         <div className='flex gap-4 items-center'>
-                            <Birdhouse className="h-10 w-10 text-black" />
                             <p className="text-xs font-medium text-muted-foreground font-headline">
                                 EXECUTION TIMELINE
                             </p>
@@ -81,7 +80,7 @@ export function ExecutionTimeline({
                         </div>
                     </div>
                     {/* Items */}
-                    <div className="space-y-0">
+                    <div className="space-y-0 mb-20">
                         {log.map((step, index) => (
                             <TimelineStepCard
                                 key={index}
@@ -137,7 +136,46 @@ export function ExecutionTimeline({
                                         </div>
                                         {/* Stats Grid */}
                                         <div className="grid grid-cols-2 gap-4">
-                                            {/* ... (Alle 4 Stat-Boxen bleiben gleich) ... */}
+                                            <div className="p-4 rounded-lg bg-muted/50 border">
+                                                <div className="text-2xl font-bold font-mono text-purple-600">
+                                                    {totalSteps}
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Schritte gesamt
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4 rounded-lg bg-muted/50 border">
+                                                <div className="text-2xl font-bold font-mono text-green-600">
+                                                    {successfulSteps}
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Erfolgreich
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4 rounded-lg bg-muted/50 border">
+                                                <div className="text-2xl font-bold font-mono text-red-600">
+                                                    {errorCount}
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Fehler
+                                                </div>
+                                            </div>
+
+                                            <div className="p-4 rounded-lg bg-muted/50 border">
+                                                <div className="text-2xl font-bold font-mono text-blue-600">
+                                                    {totalTime !== null
+                                                        ? totalTime < 60
+                                                            ? `${totalTime}s`
+                                                            : `${Math.floor(totalTime / 60)}m ${totalTime % 60}s`
+                                                        : 'N/A'
+                                                    }
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    Gesamtdauer
+                                                </div>
+                                            </div>
                                         </div>
                                         {/* Task Summary */}
                                         <div className="space-y-2">
@@ -152,13 +190,39 @@ export function ExecutionTimeline({
                                         {/* Key Findings */}
                                         {errorSteps.length > 0 && (
                                             <div className="space-y-2">
-                                                {/* ... (Fehler-Anzeige bleibt gleich) ... */}
+                                                <h4 className="font-display font-semibold text-sm flex items-center gap-2">
+                                                    <AlertCircle className="h-4 w-4 text-red-500" />
+                                                    Aufgetretene Probleme
+                                                </h4>
+                                                <ul className="text-sm text-muted-foreground space-y-1 bg-red-500/5 p-3 rounded-lg border border-red-500/20">
+                                                    {errorSteps.slice(0, 3).map((step, i) => (
+                                                        <li key={i} className="flex gap-2">
+                                                            <span className="text-red-500">•</span>
+                                                            <span>{step.step}</span>
+                                                        </li>
+                                                    ))}
+                                                    {errorSteps.length > 3 && (
+                                                        <li className="text-xs italic">
+                                                            ... und {errorSteps.length - 3} weitere
+                                                        </li>
+                                                    )}
+                                                </ul>
                                             </div>
                                         )}
                                         {/* Success Message */}
                                         {hasSuccess && (
                                             <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4">
-                                                {/* ... (Erfolgs-Anzeige bleibt gleich) ... */}
+                                                <div className="flex items-start gap-3">
+                                                    <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                                                    <div className="space-y-1">
+                                                        <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                                                            Aufgabe erfolgreich abgeschlossen
+                                                        </p>
+                                                        <p className="text-xs text-green-700 dark:text-green-300">
+                                                            Der Agent konnte die gestellte Aufgabe erfolgreich lösen.
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </CardContent>

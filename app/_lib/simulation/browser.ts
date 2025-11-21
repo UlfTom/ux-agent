@@ -1,99 +1,111 @@
 // app/_lib/simulation/browser.ts
-// ⭐️ KORRIGIERTE VERSION (GENERISCHER COOKIE-FIX & KONTEXT) ⭐️
-
 import { chromium, firefox, webkit, Browser, Page } from 'playwright';
-import type { SessionState } from './types'; // Typen importieren
+import type { SessionState, PersonaType } from './types';
 
-export async function launchBrowser(
-    browserType: 'chrome' | 'firefox' | 'safari'
-): Promise<Browser> {
-    switch (browserType) {
-        case 'firefox':
-            return await firefox.launch({ headless: true });
-        case 'safari':
-            return await webkit.launch({ headless: true });
-        default:
-            return await chromium.launch({ headless: true });
+let globalBrowser: Browser | null = null;
+
+
+export async function launchBrowser(browserType: string): Promise<Browser> {
+    if (globalBrowser && globalBrowser.isConnected()) {
+        return globalBrowser; // Wiederverwenden!
+    }
+
+    const opts = { headless: true }; // Auf false für lokales Debugging
+    if (browserType === 'firefox') globalBrowser = await firefox.launch(opts);
+    else if (browserType === 'safari') globalBrowser = await webkit.launch(opts);
+    else globalBrowser = await chromium.launch(opts);
+
+    return globalBrowser;
+}
+
+// Cookie-Logik mit Persona-Kommentar (aus vorheriger Antwort)
+function getCookieRant(persona: PersonaType): string {
+    switch (persona) {
+        case 'pragmatic': return "🍪 Banner weggeklickt. Habe keine Zeit für sowas.";
+        case 'explorative': return "🍪 Oha, Cookies. Ich stimme mal zu.";
+        case 'unsure': return "🍪 Ich klicke einfach 'Akzeptieren', damit es weggeht.";
+        default: return "🍪 Cookie-Banner akzeptiert.";
     }
 }
 
 export async function checkAndDismissCookie(
     page: Page,
-    logs: string[]
+    logs: string[],
+    personaType: PersonaType = 'pragmatic' // Default
 ): Promise<boolean> {
 
-    // ⭐️ GENERISCHER COOKIE-CHECK (Version 3)
-    // Priorisiert "Alle akzeptieren" über "OK"
+    // 1. Liste der "Endgegner" (Bekannte IDs für Otto, Zalando, Amazon etc.)
+    const explicitSelectors = [
+        // OTTO & Sourcepoint
+        '#sp-cc-accept',
+        'button[title="Zustimmen"]',
+        'button[aria-label="Zustimmen"]',
+        '#usercentrics-root', // Oft Shadow DOM Host
 
-    const acceptRegex = /^(Alle (akzeptieren|annehmen|zulassen)|(Accept|Confirm|Agree) all)$/i;
-    const okRegex = /^(Akzeptieren|Zustimmen|Einverstanden|Verstanden|OK|Got it|Ich stimme zu)$/i;
+        // ZALANDO
+        '#uc-btn-accept-banner',
+        'button[data-testid="uc-accept-all-button"]',
 
-    for (let i = 0; i < 2; i++) { // 2 Versuche
+        // AMAZON
+        '#sp-cc-accept',
+        'input[name="accept"]',
+
+        // GENERISCH (Usercentrics, OneTrust, Google)
+        '#onetrust-accept-btn-handler',
+        '.cmp-box .accept',
+        'button:has-text("Alle akzeptieren")',
+        'button:has-text("Alles akzeptieren")',
+        'button:has-text("Zustimmen")',
+        'button:has-text("Accept all")',
+        'button:has-text("Einverstanden")'
+    ];
+
+    for (const sel of explicitSelectors) {
         try {
-            // VERSUCH 1: Finde "Alle akzeptieren" (Beste Option)
-            const acceptButton = page.getByRole('button', { name: acceptRegex }).first();
-            if (await acceptButton.isVisible({ timeout: 1500 })) {
-                logs.push(`🍪 Generischer Cookie-Banner gefunden! Klicke "${await acceptButton.textContent()}"...`);
-                await acceptButton.click({ timeout: 3000, force: true });
-                await page.waitForTimeout(1000);
-                logs.push('✓ Cookie dismissed (Alle akzeptieren)');
+            const el = page.locator(sel).first();
+            if (await el.isVisible()) {
+                await el.click({ force: true });
+                await page.waitForTimeout(500);
+                logs.push(getCookieRant(personaType));
                 return true;
             }
-
-            // VERSUCH 2: Finde "OK" (Fallback, z.B. für Otto)
-            const okButton = page.getByRole('button', { name: okRegex }).first();
-            if (await okButton.isVisible({ timeout: 1000 })) {
-                logs.push(`🍪 Cookie-Banner (Fallback) gefunden! Klicke "${await okButton.textContent()}"...`);
-                await okButton.click({ timeout: 3000, force: true });
-                await page.waitForTimeout(1000);
-                logs.push('✓ Cookie dismissed (OK/Akzeptieren)');
+            // Shadow DOM Check (kurz und schmerzlos)
+            const shadowResult = await page.evaluate((s) => {
+                const roots = document.querySelectorAll('*');
+                for (const root of roots) {
+                    if (root.shadowRoot) {
+                        const btn = root.shadowRoot.querySelector(s) as HTMLElement;
+                        if (btn) { btn.click(); return true; }
+                    }
+                }
+                return false;
+            }, sel);
+            if (shadowResult) {
+                logs.push(getCookieRant(personaType));
+                await page.waitForTimeout(500);
                 return true;
             }
-
-        } catch (e: any) {
-            if (!e.message.includes('Timeout')) {
-                logs.push(`⚠️ Cookie-Check-Fehler: ${e.message.split('\n')[0]}`);
-            }
-        }
-        if (i === 0) await page.waitForTimeout(1000); // Kurze Pause vor 2. Versuch
+        } catch (e) {}
     }
-
-    logs.push('ℹ️ Kein Cookie-Banner gefunden oder geklickt.');
     return false;
 }
 
-// ⭐️ AKTUALISIERT mit besserer Seitenerkennung
 export function updateSessionState(page: Page, sessionState: SessionState) {
-    const currentUrl = page.url();
-    sessionState.currentUrl = currentUrl;
+    const url = page.url();
+    sessionState.currentUrl = url;
 
-    // Zuerst auf PDP prüfen (spezifischer)
-    if (currentUrl.includes('/p/') || // Otto
-        currentUrl.includes('/produkt/') || // Universal
-        currentUrl.includes('/item/') || // Universal
-        currentUrl.includes('/dp/') || // Amazon
-        currentUrl.includes('/rooms/')) { // Airbnb
+    // Verbesserte Erkennung für verschiedene Shops
+    const isPDP = url.includes('/p/') || url.includes('/dp/') || url.includes('/produkt/') || url.match(/\/art(ikel)?-?nr/i);
+    const isSearch = url.includes('suche') || url.includes('search') || url.includes('?q=') || url.includes('/s/');
 
+    if (isPDP) {
         sessionState.onProductPage = true;
         sessionState.onSearchResults = false;
-        console.log(`[STATE] Kontext: Auf Produktdetailseite`);
-    }
-    // Dann auf Suchergebnisse
-    else if (currentUrl.includes('/suche/') ||
-        currentUrl.includes('/search/') ||
-        currentUrl.includes('?q=') ||
-        currentUrl.includes('/s/') || // Airbnb & Amazon
-        currentUrl.includes('/neuwagen/') // ⭐️ NEU: MeinAuto.de Fix
-    ) {
-
+    } else if (isSearch) {
         sessionState.onSearchResults = true;
         sessionState.onProductPage = false;
-        console.log(`[STATE] Kontext: Auf Ergebnisseite`);
-    }
-    // Sonst ist es eine Startseite/andere Seite
-    else {
+    } else {
         sessionState.onSearchResults = false;
         sessionState.onProductPage = false;
-        console.log(`[STATE] Kontext: Auf Startseite/Sonstiges`);
     }
 }

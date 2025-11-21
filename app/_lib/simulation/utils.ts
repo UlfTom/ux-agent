@@ -22,7 +22,7 @@ export async function retryAsync<T>(
 }
 
 // ERWEITERT: Unterstützt jetzt auch Model-Varianten mit :latest
-export async function callOllama(
+export async function callLLM(
     model: 'mistral:latest' | 'llava:latest' | 'llama3.2:latest',
     prompt: string,
     imageBase64?: string, // GEÄNDERT: Einfacher Parameter

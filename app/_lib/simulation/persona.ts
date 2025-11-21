@@ -2,15 +2,15 @@
 // UPGRADED VERSION with structured template
 
 import { Language, PersonaType } from './types';
-import { callOllama } from './utils';
+import { callLLM } from './utils';
 
 export async function generatePersona(
-    task: string,
-    domain: string,
-    personaType: PersonaType,
-    language: Language = 'de'
+   task: string,
+   domain: string,
+   personaType: PersonaType,
+   language: Language = 'de'
 ): Promise<string> {
-    const promptDE = `Du bist ein Senior UX Researcher. Erstelle eine **realistische, strukturierte Persona** für einen Usability-Test.
+   const promptDE = `Du bist ein Senior UX Researcher. Erstelle eine **realistische, strukturierte Persona** für einen Usability-Test.
 
 **Kontext:**
 - Domain: "${domain}"
@@ -106,7 +106,7 @@ Wenn Persona-Typ "Vorsichtig" enthält:
 
 Antworte NUR mit dem formatierten Persona-Text. Keine zusätzlichen Kommentare.`;
 
-    const promptEN = `You are a Senior UX Researcher. Create a **realistic, structured persona** for a usability test.
+   const promptEN = `You are a Senior UX Researcher. Create a **realistic, structured persona** for a usability test.
 
 **Context:**
 - Domain: "${domain}"
@@ -202,21 +202,21 @@ If Persona Type contains "Cautious":
 
 Answer ONLY with the formatted persona text. No additional comments.`;
 
-    const prompt = language === 'de' ? promptDE : promptEN;
+   const prompt = language === 'de' ? promptDE : promptEN;
 
-    console.log('[PERSONA] Generating structured persona...');
+   console.log('[PERSONA] Generating structured persona...');
 
-    try {
-        const result = await callOllama('mistral:latest', prompt);
+   try {
+      const result = await callLLM('mistral:latest', prompt);
 
-        console.log('[PERSONA] Generated successfully');
-        return result;
-    } catch (e: any) {
-        console.error('[PERSONA] Generation failed:', e);
+      console.log('[PERSONA] Generated successfully');
+      return result;
+   } catch (e: any) {
+      console.error('[PERSONA] Generation failed:', e);
 
-        // Better fallback with structured format
-        return language === 'de'
-            ? `─────────────────────────────────────────────
+      // Better fallback with structured format
+      return language === 'de'
+         ? `─────────────────────────────────────────────
 👤 PERSONA
 ─────────────────────────────────────────────
 
@@ -276,7 +276,7 @@ Der typische Nutzungskontext:
 • Situation: Zwischendurch am Arbeitsplatz oder abends zuhause
 
 ─────────────────────────────────────────────`
-            : `─────────────────────────────────────────────
+         : `─────────────────────────────────────────────
 👤 PERSONA
 ─────────────────────────────────────────────
 
@@ -336,5 +336,5 @@ Typical Usage Context:
 • Situation: During work breaks or at home in the evening
 
 ─────────────────────────────────────────────`;
-    }
+   }
 }

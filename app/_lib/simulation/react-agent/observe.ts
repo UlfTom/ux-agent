@@ -2,7 +2,7 @@
 // ⭐️ KORRIGIERTER FIX: Verwendet jetzt den korrekten Prio-Score (6000) ⭐️
 
 import { Page } from 'playwright';
-import { callOllama } from '../utils';
+import { callLLM } from '../utils';
 import { InteractableElement } from '../types';
 import { Language } from '../types';
 
@@ -11,6 +11,7 @@ export async function observeCurrentState(
     plan: string,
     elements: InteractableElement[],
     screenshotBase64: string,
+    personaPrompt: string,
     language: Language = 'de'
 ): Promise<string> {
     console.log(`[OBSERVE] Analyzing state...`);
@@ -39,6 +40,7 @@ export async function observeCurrentState(
     const topProducts = elements.filter(e => e.priorityScore && e.priorityScore >= 6000).slice(0, 10);
     const otherElements = elements.filter(e => !e.priorityScore || e.priorityScore < 6000).slice(0, 5); // ⭐️ War 800
     const relevantElements = [...topProducts, ...otherElements];
+    const urlContext = `Du bist auf der Webseite: ${currentUrl}`;
 
     const elementSummary = relevantElements.map(e =>
         `[ID ${e.id}] ${e.role}: "${e.text.substring(0, 60)}" (priority: ${e.priorityScore || 0})`
@@ -52,78 +54,46 @@ Top 3:
 ${productLinks.slice(0, 3).map((p, i) => `${i + 1}. [ID ${p.id}] "${p.text.substring(0, 50)}"`).join('\n')}
 ` : `⚠️ **KEINE PRODUKTE** im Code gefunden (priority >= 6000)`; // ⭐️ War 800
 
-    const promptDE = `Du bist ein KI-Shopping-Agent der Produkte auswählen soll.
+    const promptDE = `
+${personaPrompt}
 
-**Dein Plan:**
-"${plan}"
+**AKTUELLER KONTEXT:**
+${urlContext}
+**Dein Plan:** "${plan}"
 
-**Verfügbare Elemente (Top ${relevantElements.length}):**
+**Verfügbare Elemente (Code):**
 ${elementSummary}
 
-${productContext}
+**AUFGABE (AUS DEINER PERSONA-SICHT):**
+1. Analysiere den Screenshot.
+2. Beschreibe kurz, was du siehst, aber **filtere es durch deine Persönlichkeit**.
+   - (Bist du pragmatisch? Dann suchst du den direkten Weg.)
+   - (Bist du unsicher? Dann wirken viele Elemente vielleicht verwirrend.)
+3. Gleiche das mit den "Verfügbaren Elementen" ab.
 
-**WICHTIGE ANWEISUNGEN:**
+Beschreibe die Situation in 2-3 Sätzen (Ich-Form, aus deiner Rolle heraus):`;
 
-1. **VISUELL PRÜFEN:** Schaue dir den Screenshot an:
-   - Siehst du Produkt-Kacheln mit Bildern?
-   - Siehst du Produktnamen und Preise (€)?
-   - Wie viele Produkte sind sichtbar?
+    const promptEN = `
+${personaPrompt}
 
-2. **PRODUKTE BESCHREIBEN:**
-   - Wenn du Produkte siehst: "Ich sehe [Anzahl] Produkte: [Namen]"
-   - Nenne konkrete Produktnamen die du SIEHST
-   - Erwähne Preise wenn sichtbar
+**CONTEXT:**
+${urlContext}
+**Your Plan:** "${plan}"
 
-3. **AUSWAHL TREFFEN:**
-   - Wenn mehrere Produkte da sind: Sage welches dir am besten gefällt und WARUM
-   - "Die [Farbe] [Produkt] mit [Feature] gefällt mir weil [Grund]"
-   - Gib die Element-ID an: [ID X]
-
-4. **KEINE HALLUZINATION:**
-   - Erfinde KEINE Element-IDs
-   - Sage nicht "Produkte da" wenn du keine siehst
-   - Sage klar wenn NICHTS passt
-
-Beschreibe was du siehst (2-4 Sätze, inkl. Produktauswahl wenn möglich):`;
-
-    const promptEN = `You are an AI shopping agent who needs to select products.
-
-**Your Plan:**
-"${plan}"
-
-**Available Elements (Top ${relevantElements.length}):**
+**Available Elements:**
 ${elementSummary}
 
-${productContext}
+**TASK (FROM YOUR PERSONA PERSPECTIVE):**
+1. Analyze the screenshot.
+2. Describe what you see, but **filter it through your personality**.
+3. Match with "Available Elements".
 
-**IMPORTANT INSTRUCTIONS:**
-
-1. **VISUAL CHECK:** Look at the screenshot:
-   - Do you see product tiles with images?
-   - Do you see product names and prices (€)?
-   - How many products are visible?
-
-2. **DESCRIBE PRODUCTS:**
-   - If you see products: "I see [number] products: [names]"
-   - Name specific products you SEE
-   - Mention prices if visible
-
-3. **MAKE SELECTION:**
-   - If multiple products: Say which one you like best and WHY
-   - "The [color] [product] with [feature] appeals to me because [reason]"
-   - Provide element ID: [ID X]
-
-4. **NO HALLUCINATION:**
-   - Don't invent element IDs
-   - Don't say "products there" if you see none
-   - Clearly state if NOTHING fits
-
-Describe what you see (2-4 sentences, incl. product selection if possible):`;
+Describe the situation in 2-3 sentences (First person, in character):`;
 
     const prompt = language === 'de' ? promptDE : promptEN;
 
     try {
-        const observation = await callOllama('llava:latest', prompt, screenshotBase64, language, undefined);
+        const observation = await callLLM('llava:latest', prompt, screenshotBase64, language, undefined);
         console.log(`[OBSERVE] ✅ Vision observation: ${observation.substring(0, 200)}...`);
 
         // CRITICAL FIX: Enrich with code-based data

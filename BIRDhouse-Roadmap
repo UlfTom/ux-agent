@@ -1,0 +1,467 @@
+# BIRDhouse: Feature Roadmap & Lock-In Strategy
+
+**Status:** Strategic Planning Phase  
+**Last Updated:** November 17, 2025  
+**Version:** 1.0
+
+---
+
+## EXECUTIVE PHILOSOPHY
+
+> **The Core Principle:** Never sacrifice product quality for lock-in. Lock-in is the *outcome* of a great product, not the input.
+>
+> **Warning (Miro/Figma Syndrome):** If we optimize for lock-in over core functionality, we become a feature-shell living off brand momentum. Instead: Build an indispensable product, *then* add strategic lock-in that makes it impossible to leave.
+>
+> **Balance Strategy:** 
+> - **60% of roadmap:** Core product excellence (Agent accuracy, Friction detection, Personas)
+> - **30% of roadmap:** Integration & collaboration (API ecosystem, Team features)
+> - **10% of roadmap:** Strategic lock-in (Data moats, Compliance, Community)
+
+---
+
+## PRODUCT VISION HIERARCHY
+
+### Mission (Unchanged)
+Demokratisierung von UX-Research durch skalierbare, KI-gestützte Nutzersimulation.
+
+### Core Value Proposition
+- **Fast:** 50x schneller als echte User Testing (Hours vs. Weeks)
+- **Scalable:** 100+ parallele Tests, unbegrenzte Iterationen
+- **Accurate:** 85%+ Friction Detection vs. Manual Review
+- **Affordable:** €49/Mo statt €5k/Projekt
+
+### Success Criteria (MVP)
+- [ ] Agent navigiert Websites mit 85%+ Accuracy
+- [ ] Friction Points Detection mit >70% Precision
+- [ ] Sub-30-second End-to-End Tests
+- [ ] 4-6% Free-to-Paid Conversion
+
+---
+
+## FEATURE BACKLOG: CATEGORIZED & PRIORITIZED
+
+### TIER 1: CORE PRODUCT (MVP - Launch Critical)
+
+#### Epic: Vision-Based Navigation Engine
+**Owner:** Tech Lead  
+**Timeline:** Weeks 1-6  
+**Criticality:** 🔴 BLOCKING
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| Playwright Element Extraction | 8 | In Progress | With semantic labels (ID → "Add to Cart") |
+| DOM Introspection + ARIA Mapping | 5 | Backlog | getAccessibleName, aria-role parsing |
+| Vision-LLM Integration (GPT-4o/Claude) | 13 | Backlog | Screenshot → Action decision |
+| Self-Healing Action Execution | 8 | Backlog | Fallback strategies for failed locators |
+| Local Ollama Integration | 5 | In Progress | llama3.2, llava support |
+| Bounding Box + Coordinate Mapping | 5 | Backlog | Vision coords → Playwright clicks |
+
+**Success Criteria:**
+- ✅ Agent completes 5-step checkout flow with 80%+ success
+- ✅ Latency <3s per step (including Vision API)
+- ✅ Zero crashes on 50 popular websites
+
+---
+
+#### Epic: Friction Detection & Analysis
+**Owner:** Product Manager  
+**Timeline:** Weeks 6-10  
+**Criticality:** 🔴 BLOCKING
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| Hesitation Pattern Detection | 8 | Backlog | Track dwell time, hover patterns |
+| Visual Hierarchy Analysis | 5 | Backlog | Prominence scoring per element |
+| WCAG Compliance Checker | 8 | Backlog | Contrast, font size, touch targets |
+| Quantified Friction Scoring | 8 | Backlog | "78% of agents fail here" |
+| Interactive Heatmap Generation | 5 | Backlog | Visual representation of problem areas |
+| Auto-Recommendations Engine | 5 | Backlog | Suggest fixes based on patterns |
+
+**Success Criteria:**
+- ✅ Detects >70% of manual UX audit issues
+- ✅ Precision >80% (false positive rate <20%)
+- ✅ Report generation <5 seconds
+
+---
+
+#### Epic: Persona Engine & Behavior Simulation
+**Owner:** Tech Lead  
+**Timeline:** Weeks 8-12  
+**Criticality:** 🔴 BLOCKING
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| Persona Profile Definition UI | 5 | Backlog | Goal-oriented, browsing, cautious profiles |
+| Behavior Randomization | 8 | Backlog | Add variance to simulate real users |
+| Persona Persistence & Versioning | 5 | Backlog | Save, reuse, compare persona across runs |
+| Multi-Persona Test Orchestration | 13 | Backlog | Run same test with 5+ personas in parallel |
+| Persona Learning from Real Data | 13 | Backlog | **Data Moat #1:** Adapt profiles to customer's actual users |
+| A/B Comparison Reports | 8 | Backlog | Compare outcomes between personas |
+
+**Success Criteria:**
+- ✅ 5 Personas × 2 test scenarios = measurable variance in paths
+- ✅ Learned personas improve accuracy by 10%+ over time
+- ✅ Comparison reports highlight persona-specific friction
+
+---
+
+### TIER 2: COLLABORATION & TEAM FEATURES (Post-MVP - Weeks 12-18)
+
+#### Epic: Team Collaboration & Reviews
+**Owner:** Product Manager  
+**Timeline:** Weeks 12-16  
+**Criticality:** 🟡 IMPORTANT (Lock-in Lever #1)
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| Test Result Sharing & Comments | 5 | Backlog | Team can review results, add notes |
+| Friction Point Tagging & Voting | 5 | Backlog | Product team votes on priority |
+| Slack Integration (Auto-Notify) | 8 | Backlog | "New test complete: 3 critical issues found" |
+| Permission Levels (RBAC) | 5 | Backlog | Viewer, Tester, Admin roles |
+| Audit Trail / History | 5 | Backlog | Who ran what, when, why (compliance) |
+| @mentions & Task Assignment | 3 | Backlog | "Fix this friction: @designer, @pm" |
+
+**Success Criteria:**
+- ✅ 50% of teams are sharing results with >2 people
+- ✅ Slack integration has >80% weekly active rate
+- ✅ Audit trail enables compliance use cases
+
+**Lock-in Impact:** ⭐⭐⭐ Once embedded in team workflows, switching costs rise significantly.
+
+---
+
+#### Epic: Integration Ecosystem
+**Owner:** Tech Lead  
+**Timeline:** Weeks 13-18  
+**Criticality:** 🟡 IMPORTANT (Lock-in Lever #2)
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| **Figma Plugin** | 13 | Backlog | Test directly from Figma design files |
+| **GitHub Actions Integration** | 8 | Backlog | Auto-run tests on PR, block merge if friction detected |
+| **Jira Sync** (Create issues from friction) | 8 | Backlog | Auto-create tickets, link to test runs |
+| **Linear Integration** | 5 | Backlog | Similar to Jira, for Linear users |
+| **Slack Webhook** | 3 | Backlog | Custom alerts, summaries |
+| **Dovetail Export** | 5 | Backlog | Export raw test data + transcripts |
+| **Zapier / Make Integration** | 5 | Backlog | IFTTT-style automation |
+| **Custom REST API** | 13 | Backlog | Full programmatic access for power users |
+| **Webhooks for Custom Workflows** | 8 | Backlog | Trigger external systems on test events |
+
+**Success Criteria:**
+- ✅ 3+ integrations GA (Figma, GitHub, Jira/Linear)
+- ✅ 20% of paying customers use ≥1 integration
+- ✅ API documentation >90% coverage
+
+**Lock-in Impact:** ⭐⭐⭐⭐⭐ Integrations are THE strongest retention lever. Deep workflow embedding makes switching nearly impossible.
+
+---
+
+### TIER 3: STRATEGIC LOCK-IN FEATURES (Weeks 18-26)
+
+#### Epic: Data Moat & Personalization
+**Owner:** ML Engineer  
+**Timeline:** Weeks 16-22  
+**Criticality:** 🟢 STRATEGIC
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| Historical Friction Tracking | 8 | Backlog | Compare friction over releases, identify regression |
+| Auto-Generated Industry Benchmarks | 13 | Backlog | **Lock-in #1:** "Your friction vs. retail avg = -23%" |
+| Customer-Specific Friction Baselines | 8 | Backlog | Learn "normal" for THIS customer over time |
+| Persona Auto-Tuning (ML) | 21 | Backlog | **Lock-in #2:** Personas improve 5-10% per month with usage |
+| Contextual Recommendations | 8 | Backlog | "Similar friction found in 12 other tests; here's how they fixed it" |
+| Custom Friction Algorithms | 5 | Backlog | Allow teams to define custom metrics (e.g., "conversion friction score") |
+
+**Success Criteria:**
+- ✅ >100 tests accumulated by Month 4 (critical mass for meaningful trends)
+- ✅ Benchmarks have >80% accuracy (vs. manual review)
+- ✅ Customers report "impossible to replicate with other tools"
+
+**Lock-in Impact:** ⭐⭐⭐⭐ Historical data + learned models = **customer proprietary asset**. Switching = starting over.
+
+---
+
+#### Epic: Community & Market Position
+**Owner:** Marketing / Community Manager  
+**Timeline:** Weeks 18-26  
+**Criticality:** 🟢 STRATEGIC
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| Public Friction Leaderboards | 8 | Backlog | "UX Friction Index: Who has the smoothest checkout flow?" |
+| Industry-Specific Benchmarks | 13 | Backlog | E-commerce, SaaS, Media friction comparisons |
+| Beta Users Community Hub | 5 | Backlog | Private Slack, weekly webinars, exclusive access |
+| Customer Case Studies / Showcase | 5 | Backlog | Public wins (with permission) |
+| Founder's Lifetime Deal Program | 3 | Backlog | First 100 users: Lifetime Pro access |
+| Monthly "UX Bug of the Month" Awards | 3 | Backlog | Celebrate interesting friction discoveries |
+| Open-Source Framing / Research | 5 | Backlog | Publish anonymized friction datasets for research |
+
+**Success Criteria:**
+- ✅ 50+ customers on leaderboards (public commitment)
+- ✅ 10+ case studies published
+- ✅ >2000 people in community hub by Month 8
+
+**Lock-in Impact:** ⭐⭐⭐ Community & public benchmarks = social/brand lock-in. Switching means losing status/insights.
+
+---
+
+#### Epic: Enterprise Compliance & Security
+**Owner:** Tech Lead  
+**Timeline:** Weeks 20-26  
+**Criticality:** 🟢 STRATEGIC
+
+| Feature | Story Points | Status | Notes |
+|---------|-------------|--------|-------|
+| SSO / SAML Integration | 13 | Backlog | Enterprise auth (Okta, Azure AD) |
+| GDPR/CCPA Compliance Mode | 8 | Backlog | Data minimization, export controls |
+| Audit Trail & SOC 2 Readiness | 8 | Backlog | **Lock-in #3:** Enterprise security = switching pain |
+| IP Whitelisting | 3 | Backlog | On-premise-adjacent security |
+| Data Retention Policies | 5 | Backlog | HIPAA/FedRAMP adjacent (future) |
+| Role-Based Access Control (RBAC) | 8 | Backlog | Fine-grained permissions |
+
+**Success Criteria:**
+- ✅ SOC 2 Type II certified (Year 2)
+- ✅ ≥1 Enterprise customer won due to compliance
+
+**Lock-in Impact:** ⭐⭐⭐ Enterprise customers = high switching costs (security audits, integrations, training).
+
+---
+
+### TIER 4: NICE-TO-HAVE / FUTURE (Post-Series A)
+
+| Feature | Story Points | Timeline | Notes |
+|---------|-------------|----------|-------|
+| Mobile App Testing | 21 | Month 12+ | Native iOS/Android via Appium |
+| Canvas/SVG Element Detection (YOLO) | 13 | Month 10+ | For edge cases only |
+| Custom LLM Fine-Tuning | 21 | Month 10+ | Train models on customer data (if legal) |
+| Competitive Analysis (Auto-test competitors) | 13 | Month 8+ | Compare friction with 5 competitors |
+| AI Coaching Agent | 13 | Month 12+ | "Hey, here's how to reduce friction by 30%" |
+| White-Label Platform | 21 | Month 12+ | Resell to agencies |
+| Live User Session Replay | 21 | Month 14+ | Combine synthetic + real user data |
+| Conversion Rate Prediction | 21 | Month 14+ | ML model: "This friction will cost $10k/month" |
+
+---
+
+## EXECUTION ROADMAP
+
+### Phase 1: MVP Launch (Weeks 1-12) – **CORE PRODUCT ONLY**
+
+**Goal:** Launch with sufficient quality that early customers see immediate value.
+
+**Timeline:**
+- **Weeks 1-6:** Core Agent + Vision Integration
+- **Weeks 6-10:** Friction Detection
+- **Weeks 10-12:** Polish, Testing, Beta Launch
+
+**Deliverables:**
+- Web App (Next.js)
+- Agent can complete 3-5 step tasks with 80%+ success
+- Friction Report (PDF, JSON)
+- Free tier: 1 test/month
+- Pro tier: €49/month
+
+**Success Metrics:**
+- 100+ Free Sign-ups
+- 5-10 Paying Customers
+- <5% churn (first 3 months)
+- 4-6% Free-to-Paid Conversion
+
+**No Distractions:**
+- ❌ Skip community, benchmarks, integrations for now
+- ❌ Skip compliance until Seed funding
+- ✅ Focus 100% on Agent accuracy
+
+---
+
+### Phase 2: Team Features + Core Integrations (Weeks 12-18) – **ADD COLLABORATION**
+
+**Goal:** Make BIRDhouse indispensable for product teams. Introduce first lock-in vectors.
+
+**Timeline:**
+- **Weeks 12-14:** Team Collaboration (Comments, Sharing, Slack)
+- **Weeks 14-16:** Figma Plugin
+- **Weeks 16-18:** GitHub Actions, API v1
+
+**Deliverables:**
+- Team sharing & commenting
+- Figma plugin (basic)
+- GitHub action for PRs
+- REST API (v1, beta)
+- Slack integration
+
+**Success Metrics:**
+- 50+ Paying Customers
+- 30% team feature adoption
+- $5-10k MRR
+- Churn: <3%
+
+**Lock-in Focus:**
+- Slack embeds tests into daily workflows
+- Figma plugin means designers can't avoid the tool
+- GitHub integration = part of the CI/CD pipeline
+
+---
+
+### Phase 3: Data Moat + Community (Weeks 18-26) – **BUILD STICKINESS**
+
+**Goal:** Make switching economically and socially irrational.
+
+**Timeline:**
+- **Weeks 18-20:** Historical Analytics, Benchmarks
+- **Weeks 20-22:** Community Hub, Case Studies
+- **Weeks 22-24:** Persona Auto-Tuning (ML)
+- **Weeks 24-26:** Enterprise Compliance
+
+**Deliverables:**
+- Friction Leaderboards (public)
+- Industry Benchmarks
+- Beta Community Program
+- Persona Learning (auto-improve)
+- RBAC, Audit Trail
+- Jira/Linear integration
+
+**Success Metrics:**
+- 200+ Paying Customers
+- $20-30k MRR
+- >50% team adoption (within paying accounts)
+- Churn: <2%
+- 10+ case studies published
+
+**Lock-in Focus:**
+- Accumulated test data = proprietary asset
+- Public leaderboards = brand/social commitment
+- Learned personas = tool becomes more valuable over time
+- Enterprise features = security switching costs
+
+---
+
+### Phase 4: Scaling & Defensibility (Weeks 26+) – **SEAL THE MOAT**
+
+**Goal:** Make BIRDhouse unbeatable for UX Testing.
+
+**Deliverables:**
+- Competitive Intelligence (auto-test competitors)
+- Advanced ML (conversion prediction, anomaly detection)
+- White-label version for agencies
+- SOC 2 Type II cert
+- Series A fundraising package
+
+---
+
+## BACKLOG PRIORITIZATION FRAMEWORK
+
+**Scoring: (Impact × Urgency × Feasibility) / (Risk × Engineering Cost)**
+
+### Must-Have (Core Product) – Start Now
+- ✅ Element Extraction with Labels
+- ✅ Vision-LLM Integration
+- ✅ Friction Detection
+- ✅ Persona Engine
+- ✅ Local Ollama Support
+
+### Should-Have (Phase 2) – Start Week 12
+- ✅ Team Collaboration
+- ✅ Figma Integration
+- ✅ GitHub Actions
+- ✅ REST API
+
+### Nice-to-Have (Phase 3+)
+- 🔶 Leaderboards
+- 🔶 Community Hub
+- 🔶 Persona Auto-Tuning
+- 🔶 Competitive Analysis
+
+### Defer (Until Clear Signal)
+- ❌ Mobile app testing
+- ❌ YOLO integration (unless edge cases prove critical)
+- ❌ Custom LLM fine-tuning
+- ❌ White-label version
+
+---
+
+## ANTI-PATTERN GUARDRAILS (AVOIDING MIRO/FIGMA SYNDROME)
+
+**Red Flags – Stop Immediately If You See These:**
+
+| Red Flag | Action |
+|----------|--------|
+| "We're prioritizing integrations over Agent accuracy" | ⚠️ STOP. Accuracy is core. Integrations amplify it. |
+| "The feature roadmap is 50% lock-in, 50% core" | ⚠️ STOP. Should be 70% core, 30% lock-in until Series A. |
+| "We're building custom LLM fine-tuning before 100 customers" | ⚠️ STOP. Over-engineering. Focus on retention signal first. |
+| "Let's add WhiteLabel version to close enterprise deals" | ⚠️ STOP. Feature creep before product-market fit. |
+| "Community/events team is bigger than engineering" | ⚠️ STOP. If product sucks, no community can save you. |
+
+---
+
+## SUCCESS CRITERIA: WHEN TO MOVE TO NEXT PHASE
+
+| Phase | Metric | Target | Gate |
+|-------|--------|--------|------|
+| MVP → Phase 2 | Free Users | 100+ | Unlock Team Features |
+| MVP → Phase 2 | Paying Customers | 5+ | Unlock Integrations |
+| MVP → Phase 2 | Agent Accuracy | 80%+ | Must-pass |
+| MVP → Phase 2 | Churn Rate | <5% | Health check |
+| Phase 2 → Phase 3 | Team Adoption | 30%+ of customers | Lock-in Starting Signal |
+| Phase 2 → Phase 3 | MRR | $5k+ | Scale signal |
+| Phase 3 → Phase 4 | Test Volume | 100+ tests/customer/month | Data moat forming |
+| Phase 3 → Phase 4 | Net Revenue Retention | 110%+ | Expansion signals |
+
+---
+
+## DEPENDENCIES & BLOCKERS
+
+### Technical Dependencies
+- Playwright v1.40+: ✅ Available
+- Ollama local LLM: ✅ Available
+- GPT-4 Vision API: ✅ Available (paid)
+- Next.js 13+: ✅ Available
+
+### Non-Technical Blockers
+- [ ] Figma plugin API approval (Week 14-18)
+- [ ] GitHub Actions marketplace listing (Week 16)
+- [ ] Jira/Linear vendor relationships (Week 16)
+- [ ] Legal: Terms of Use for competitive testing (Week 20)
+
+---
+
+## TEAM & OWNERSHIP
+
+| Role | Capacity | Responsible For |
+|------|----------|-----------------|
+| Technical Lead | Full-time | Core Agent, Vision Integration, Ollama, Friction Detection |
+| Product Manager | Full-time | Backlog prioritization, Feature design, Customer feedback |
+| Frontend Engineer | Full-time | Dashboard, UI/UX, Team features |
+| ML/Data Engineer | Part-time (consultant) | Persona learning, benchmarks, anomaly detection |
+| DevOps | Part-time | Infrastructure, scaling, performance |
+| Community Manager | Part-time (post-MVP) | Community hub, case studies, benchmarks, marketing |
+
+---
+
+## SUMMARY TABLE: FEATURE BREAKDOWN
+
+| Epic | Phase | Weeks | Story Points | Lock-in Impact | Priority |
+|------|-------|-------|-------------|-----------------|----------|
+| Vision Engine | 1 | 1-6 | 44 | ⭐ Core | P0 |
+| Friction Detection | 1 | 6-10 | 36 | ⭐ Core | P0 |
+| Persona Engine | 1 | 8-12 | 48 | ⭐ Core | P0 |
+| Team Collaboration | 2 | 12-16 | 23 | ⭐⭐⭐ | P1 |
+| Integrations | 2-3 | 13-18 | 68 | ⭐⭐⭐⭐⭐ | P1 |
+| Data Moat | 3 | 16-22 | 64 | ⭐⭐⭐⭐ | P2 |
+| Community | 3 | 18-26 | 34 | ⭐⭐⭐ | P2 |
+| Enterprise Security | 3 | 20-26 | 45 | ⭐⭐⭐ | P2 |
+
+---
+
+## NEXT STEPS
+
+1. **Review & Align:** Present this roadmap to co-founder(s) / investors. Confirm phase timing.
+2. **Create Jira/Linear Board:** Translate epics → stories → tasks. Assign owners.
+3. **Lock Phase 1 Scope:** No feature creep between weeks 1-12. Core only.
+4. **Weekly Standup:** Use this roadmap as north star. Deviate only with explicit approval.
+5. **Monthly Reviews:** Reassess based on customer feedback. Update roadmap accordingly.
+
+---
+
+**Last Note:** This roadmap is **not set in stone**. Customer feedback, competitive moves, or technical learnings will shift priorities. Review monthly. But the principle remains: **Core product excellence first. Lock-in second.**
+
+🚀

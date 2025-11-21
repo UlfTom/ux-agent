@@ -218,7 +218,7 @@ function NeuralVisual() {
 
             {/* Thinking Labels */}
             <motion.div
-                className="absolute top-12 left-12 text-sm font-mono text-purple-400 space-y-2 bg-background/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-purple-500/30"
+                className="absolute top-12 left-12 text-sm font-mono text-purple-400 space-y-2 bg-background/90 backdrop-blur-md px-6 py-4 rounded-xl border border-purple-500/30"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: [0.5, 1, 0.5] }}
                 transition={{ duration: 2, repeat: Infinity }}

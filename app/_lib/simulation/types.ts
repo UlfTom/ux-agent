@@ -1,16 +1,21 @@
 // app/_lib/simulation/types.ts
-// FIX: Add scrollCount to SessionState
+
+export type Language = 'de' | 'en';
+export type PersonaType = 'pragmatic' | 'explorative' | 'unsure';
+
+// ⭐️ NEU: Der Typ für die Simulation-Modi
+export type SimulationMode = 'default' | 'visual_blur' | 'visual_protanopia' | 'motor_keyboard' | 'cognitive_distracted' | 'elderly_user';
 
 export type LogStep = {
     step: string;
     logs: string[];
-    image?: string | null; // ⭐️ ÄNDERUNG: null erlauben
+    image?: string | null;
     timestamp?: number;
     plan?: string;
     observation?: string;
     verification?: any;
     reflection?: string;
-    timings_ms?: Record<string, number>; // ⭐️ NEU: Timings
+    timings_ms?: Record<string, number>;
 };
 
 export type InteractableElement = {
@@ -39,15 +44,21 @@ export type SessionState = {
     }>;
     seenSearchField: boolean;
     searchFieldPosition: 'top' | 'unknown';
-
-    // CRITICAL FIX: Add scroll tracking
     scrollCount?: number;
     consecutiveScrolls?: number;
 };
 
-export type Language = 'de' | 'en';
+export interface FrictionPoint {
+    step: number;
+    description: string;
+    severity: 'high' | 'medium' | 'low';
+}
 
-export type PersonaType =
-    | 'Pragmatisch & Zielorientiert'
-    | 'Explorativ & Neugierig'
-    | 'Vorsichtig & Skeptisch';
+export interface SimulationResult {
+    success: boolean;
+    logs: string[];
+    summary: string;
+    frictionPoints: FrictionPoint[];
+    uxScore: number;
+    duration?: number;
+}

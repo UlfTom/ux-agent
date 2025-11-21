@@ -70,7 +70,7 @@ export function CTASection() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: index * 0.1 }}
-                                    className="flex items-start gap-4 p-6 rounded-2xl bg-background/50 backdrop-blur-sm border border-border hover:border-primary/50 transition-all"
+                                    className="flex items-start gap-4 p-6 rounded-xl bg-background/50 backdrop-blur-sm border border-border hover:border-primary/50 transition-all"
                                 >
                                     <div className={`p-3 rounded-xl bg-gradient-to-br ${gradients.brandLight}`}>
                                         <Icon className="h-6 w-6 text-white" />

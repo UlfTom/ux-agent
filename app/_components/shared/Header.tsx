@@ -15,9 +15,10 @@ export function Header() {
   const { scrollY } = useScroll();
   const pathname = usePathname();
 
-  const headerY = useTransform(scrollY, [0, 100], [16, 8]);
-  const headerBlur = useTransform(scrollY, [0, 100], [16, 24]);
-  const headerBg = useTransform(scrollY, [0, 100], [0.7, 0.85]);
+  const headerY = useTransform(scrollY, [0, 200], [24, 0]);
+  const headerBlur = useTransform(scrollY, [0, 200], [16, 24]);
+  const headerBg = useTransform(scrollY, [0, 200], [0.7, 0.85]);
+  const headerBorderTop = useTransform(scrollY, [0, 200], [16, 0]);
 
   // Determine which page we're on
   const isHomePage = pathname === '/';
@@ -61,31 +62,15 @@ export function Header() {
   // Define CTA button based on current page
   const getCTAButton = () => {
     if (isHomePage) {
-      return {
-        label: 'Jetzt starten',
-        href: '/login',
-      };
+      return { label: 'Jetzt starten', href: '/login' };
     }
-
     if (isSimulationPage) {
-      return {
-        label: 'Neue Simulation',
-        href: '/simulation',
-        onClick: () => window.location.reload(),
-      };
+      return { label: 'Neue Simulation', href: '/simulation', onClick: () => window.location.reload() };
     }
-
     if (isLoginPage) {
-      return {
-        label: 'Registrieren',
-        href: '/register',
-      };
+      return { label: 'Registrieren', href: '/register' };
     }
-
-    return {
-      label: 'Login',
-      href: '/login',
-    };
+    return { label: 'Login', href: '/login' };
   };
 
   const ctaButton = getCTAButton();
@@ -93,10 +78,8 @@ export function Header() {
   return (
     <>
       <motion.header
-        className="fixed top-0 left-0 right-0 z-500000"
-        style={{
-          y: headerY,
-        }}
+        className="fixed top-0 left-0 right-0 z-999"
+        style={{ y: headerY }}
       >
         <div className="container mx-auto px-4">
           <motion.nav
@@ -104,6 +87,8 @@ export function Header() {
             style={{
               backgroundColor: useTransform(headerBg, (v) => `rgba(255, 255, 255, ${v * 0.1})`),
               backdropFilter: useTransform(headerBlur, (v) => `blur(${v}px)`),
+              borderTopLeftRadius: useTransform(headerBorderTop, (v) => `${v}px`),
+              borderTopRightRadius: useTransform(headerBorderTop, (v) => `${v}px`),
             }}
           >
             <div className="flex items-center justify-between h-16 px-6">
@@ -117,7 +102,6 @@ export function Header() {
                 >
                   <Birdhouse className="h-8 w-8 text-black" />
                   <span className="text-xxl md:text-xl text-black font-headline tracking-tighter-custom uppercase">bird<span className="font-accent normal-case">house</span></span>
-
                 </motion.div>
                 <span className={`text-xl font-bold group-hover:${gradients.brandText} transition-all duration-300`}>
                   UX Agent
@@ -143,23 +127,28 @@ export function Header() {
                   </motion.div>
                 ))}
 
-                {/* CTA Button Desktop */}
-                <Button
-                  asChild={!ctaButton.onClick}
-                  onClick={ctaButton.onClick}
-                  className={`font-display font-semibold shadow-lg text-white hover:shadow-xl transition-all bg-gradient-to-r ${gradients.brandLight}`}
-                >
-                  {ctaButton.onClick ? (
-                    <button>{ctaButton.label}</button>
-                  ) : (
-                    <Link href={ctaButton.href}>{ctaButton.label}</Link>
-                  )}
-                </Button>
+                {/* CTA Button Desktop - ⭐️ KORRIGIERT ⭐️ */}
+                {ctaButton.onClick ? (
+                  // Variante 1: Button mit Click Handler (KEIN verschachtelter <button>)
+                  <Button
+                    onClick={ctaButton.onClick}
+                    className={`font-display font-semibold shadow-lg text-white hover:shadow-xl transition-all bg-gradient-to-r ${gradients.brandLight}`}
+                  >
+                    {ctaButton.label}
+                  </Button>
+                ) : (
+                  // Variante 2: Link (asChild rendert den Link als Button-Style)
+                  <Button
+                    asChild
+                    className={`font-display font-semibold shadow-lg text-white hover:shadow-xl transition-all bg-gradient-to-r ${gradients.brandLight}`}
+                  >
+                    <Link href={ctaButton.href!}>{ctaButton.label}</Link>
+                  </Button>
+                )}
               </div>
 
               {/* Mobile Menu Toggle */}
-              <motion.div whileTap={{ scale: 0.95 }}
-                className="md:hidden">
+              <motion.div whileTap={{ scale: 0.95 }} className="md:hidden">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -194,20 +183,27 @@ export function Header() {
                 {item.label}
               </Link>
             ))}
-            <Button
-              asChild={!ctaButton.onClick}
-              onClick={() => {
-                setIsMenuOpen(false);
-                ctaButton.onClick?.();
-              }}
-              className={`w-full font-display text-white font-semibold bg-gradient-to-r ${gradients.brandLight}`}
-            >
-              {ctaButton.onClick ? (
-                <button>{ctaButton.label}</button>
-              ) : (
-                <Link href={ctaButton.href}>{ctaButton.label}</Link>
-              )}
-            </Button>
+
+            {/* Mobile CTA - Ebenfalls korrigiert */}
+            {ctaButton.onClick ? (
+              <Button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  ctaButton.onClick?.();
+                }}
+                className={`w-full font-display text-white font-semibold bg-gradient-to-r ${gradients.brandLight}`}
+              >
+                {ctaButton.label}
+              </Button>
+            ) : (
+              <Button
+                asChild
+                onClick={() => setIsMenuOpen(false)}
+                className={`w-full font-display text-white font-semibold bg-gradient-to-r ${gradients.brandLight}`}
+              >
+                <Link href={ctaButton.href!}>{ctaButton.label}</Link>
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>

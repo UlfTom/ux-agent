@@ -1,7 +1,7 @@
 // app/_lib/simulation/react-agent/verify.ts
 // ⭐️ NEUE GENERISCHE VERSION (OHNE GOLDENE REGEL) ⭐️
 
-import { callOllama } from '../utils';
+import { callLLM } from '../utils';
 import { InteractableElement, SessionState, Language, PersonaType } from '../types';
 
 export type VerificationResult = {
@@ -20,7 +20,7 @@ async function extractSearchTerm(task: string, language: Language): Promise<stri
         ? `Extrahiere nur die 2-3 wichtigsten Suchbegriffe aus dieser Aufgabe: "${task}". Antworte nur mit den Begriffen. Beispiel: "Winter-Jeans Damen".`
         : `Extract just the 2-3 most important search keywords from this task: "${task}". Respond only with the keywords. Example: "Winter Jeans Women".`;
 
-    return await callOllama('mistral:latest', prompt, undefined, language, undefined);
+    return await callLLM('mistral:latest', prompt, undefined, language, undefined);
 }
 
 export async function verifyPlanMatch(
@@ -106,7 +106,7 @@ ${productLinks.slice(0, 3).map(p => `[ID ${p.id}] "${p.text.substring(0, 40)}"`)
     const prompt = promptDE;
 
     try {
-        const response = await callOllama('llama3.2:latest', prompt, undefined, language, undefined);
+        const response = await callLLM('llama3.2:latest', prompt, undefined, language, undefined);
 
         const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (!jsonMatch || !jsonMatch[0]) {
